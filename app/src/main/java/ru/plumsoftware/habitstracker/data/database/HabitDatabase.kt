@@ -6,15 +6,18 @@ import androidx.room.RoomDatabase
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 import ru.plumsoftware.habitstracker.data.model.Habit
+import ru.plumsoftware.habitstracker.data.model.HabitCompletion
+import ru.plumsoftware.habitstracker.data.model.dao.HabitCompletionDao
 import ru.plumsoftware.habitstracker.data.model.dao.HabitDao
 
 @Database(
-    entities = [Habit::class],
+    entities = [Habit::class, HabitCompletion::class],
     version = 1,
     exportSchema = false
 )
 abstract class HabitDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
+    abstract fun habitCompletionDao(): HabitCompletionDao
 
     companion object {
         val databaseModule = module {
@@ -23,11 +26,16 @@ abstract class HabitDatabase : RoomDatabase() {
                     androidContext(),
                     HabitDatabase::class.java,
                     "habit_database"
-                ).build()
+                )
+                    .build()
             }
 
             single<HabitDao> {
                 get<HabitDatabase>().habitDao()
+            }
+
+            single<HabitCompletionDao> {
+                get<HabitDatabase>().habitCompletionDao()
             }
         }
     }

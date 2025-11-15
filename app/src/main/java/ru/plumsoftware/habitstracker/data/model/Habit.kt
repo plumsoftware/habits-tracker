@@ -9,7 +9,7 @@ data class Habit(
     val id: String,
     val title: String,
     val body: String,
-    val periodicity: Int,
+    val periodicity: Periodicity,
     val creationDate: Long,
-    val habitTime: Long
+    val targetCount: Int = 1 // Количество выполнений за период
 )

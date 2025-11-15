@@ -34,6 +34,8 @@ class HomeViewModel(
             is HomeEvent.SelectHabit -> selectHabit(event.habit)
             is HomeEvent.SelectDay -> selectDay(event.day)
             is HomeEvent.SelectDate -> selectDate(event.date)
+            is HomeEvent.MarkHabitCompleted -> markHabitCompleted(event.habitId)
+            is HomeEvent.UnmarkHabitCompleted -> unmarkHabitCompleted(event.habitId)
         }
     }
 
@@ -44,7 +46,8 @@ class HomeViewModel(
         _state.update {
             it.copy(
                 selectedDate = date,
-                selectedDay = cal.get(Calendar.DAY_OF_MONTH)
+                selectedDay = cal.get(Calendar.DAY_OF_MONTH),
+                selectedMonth = cal.get(Calendar.MONTH)
             )
         }
 
@@ -56,13 +59,19 @@ class HomeViewModel(
             _state.update { it.copy(isLoading = true) }
 
             try {
-                withContext(Dispatchers.IO) {
-
+                repository.getHabitsWithStatus(date).collect { habitsWithStatus ->
+                    _state.update {
+                        it.copy(
+                            habitsWithStatus = habitsWithStatus,
+                            isLoading = false
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 _state.update {
                     it.copy(
-                        isLoading = false
+                        isLoading = false,
+                        errorMessage = "Ошибка загрузки привычек: ${e.message}"
                     )
                 }
             }
@@ -74,15 +83,50 @@ class HomeViewModel(
             _state.update { it.copy(isLoading = true) }
 
             try {
-                withContext(Dispatchers.IO) {
-                    repository.getAllHabits().collect { habits ->
-                        _state.update { it.copy(habits = habits, isLoading = false) }
+                // Загружаем привычки для текущей выбранной даты
+                repository.getHabitsWithStatus(state.value.selectedDate).collect { habitsWithStatus ->
+                    _state.update {
+                        it.copy(
+                            habitsWithStatus = habitsWithStatus,
+                            isLoading = false
+                        )
                     }
                 }
             } catch (e: Exception) {
                 _state.update {
                     it.copy(
-                        isLoading = false
+                        isLoading = false,
+                        errorMessage = "Ошибка загрузки привычек: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    private fun markHabitCompleted(habitId: String) {
+        viewModelScope.launch {
+            try {
+                repository.markHabitCompleted(habitId, state.value.selectedDate)
+                // Данные автоматически обновятся через Flow
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(
+                        errorMessage = "Ошибка отметки привычки: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    private fun unmarkHabitCompleted(habitId: String) {
+        viewModelScope.launch {
+            try {
+                repository.unmarkHabitCompleted(habitId, state.value.selectedDate)
+                // Данные автоматически обновятся через Flow
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(
+                        errorMessage = "Ошибка снятия отметки: ${e.message}"
                     )
                 }
             }
@@ -95,10 +139,13 @@ class HomeViewModel(
 
             try {
                 repository.insertHabit(habit)
+                // После добавления привычки перезагружаем список для текущей даты
+                loadHabitsForDate(state.value.selectedDate)
             } catch (e: Exception) {
                 _state.update {
                     it.copy(
-                        isLoading = false
+                        isLoading = false,
+                        errorMessage = "Ошибка добавления привычки: ${e.message}"
                     )
                 }
             }
@@ -111,10 +158,13 @@ class HomeViewModel(
 
             try {
                 repository.updateHabit(habit)
+                // После обновления привычки перезагружаем список для текущей даты
+                loadHabitsForDate(state.value.selectedDate)
             } catch (e: Exception) {
                 _state.update {
                     it.copy(
-                        isLoading = false
+                        isLoading = false,
+                        errorMessage = "Ошибка обновления привычки: ${e.message}"
                     )
                 }
             }
@@ -130,10 +180,13 @@ class HomeViewModel(
                 if (_state.value.selectedHabit?.id == habit.id) {
                     _state.update { it.copy(selectedHabit = null) }
                 }
+                // После удаления привычки перезагружаем список для текущей даты
+                loadHabitsForDate(state.value.selectedDate)
             } catch (e: Exception) {
                 _state.update {
                     it.copy(
-                        isLoading = false
+                        isLoading = false,
+                        errorMessage = "Ошибка удаления привычки: ${e.message}"
                     )
                 }
             }
@@ -145,15 +198,19 @@ class HomeViewModel(
     }
 
     private fun selectDay(day: Int) {
+        val calendar = Calendar.getInstance().apply {
+            timeInMillis = state.value.selectedDate
+            set(Calendar.DAY_OF_MONTH, day)
+        }
+
         _state.update {
             it.copy(
                 selectedDay = day,
-                selectedDate = Calendar.getInstance().apply {
-                    timeInMillis = state.value.selectedDate
-                    set(Calendar.DAY_OF_MONTH, day)
-                }.timeInMillis
+                selectedDate = calendar.timeInMillis
             )
         }
+
+        loadHabitsForDate(calendar.timeInMillis)
     }
 
     private fun initDate() {
@@ -164,9 +221,16 @@ class HomeViewModel(
         _state.update {
             it.copy(
                 selectedDate = currentDate,
-                selectedDay = cal.get(Calendar.DAY_OF_MONTH)
+                selectedDay = cal.get(Calendar.DAY_OF_MONTH),
+                selectedMonth = cal.get(Calendar.MONTH)
             )
         }
+
+        loadHabitsForDate(currentDate)
+    }
+
+    fun clearErrorMessage() {
+        _state.update { it.copy(errorMessage = null) }
     }
 
     companion object {
