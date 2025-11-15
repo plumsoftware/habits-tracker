@@ -2,9 +2,13 @@ package ru.plumsoftware.habitstracker.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -26,7 +30,8 @@ fun DayItem(
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier,
+        modifier = modifier
+            .height(80.dp),
         colors = CardDefaults.cardColors(
             containerColor = when {
                 isSelected -> MaterialTheme.colorScheme.primary
@@ -43,8 +48,8 @@ fun DayItem(
     ) {
         Column(
             modifier = Modifier
-                .padding(vertical = Dimen.extraLarge, horizontal = Dimen.mediumPlus)
-                .fillMaxWidth(),
+                .padding(horizontal = Dimen.mediumPlus)
+                .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(
                 space = Dimen.small,
                 alignment = Alignment.CenterVertically

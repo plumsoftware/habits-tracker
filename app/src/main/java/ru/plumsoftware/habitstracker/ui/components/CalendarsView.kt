@@ -4,6 +4,7 @@ import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,64 +45,83 @@ fun CalendarView(
     onDaySelected: (Int) -> Unit
 ) {
     val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
-    var lastScrollTime by remember { mutableLongStateOf(0L) }
 
-    // Мгновенный snap при любом движении
-    LaunchedEffect(listState.firstVisibleItemScrollOffset, listState.isScrollInProgress) {
-        if (listState.isScrollInProgress) {
-            val currentTime = System.currentTimeMillis()
-            if (currentTime - lastScrollTime > 50) {
-                lastScrollTime = currentTime
-                val targetWeek = findTargetWeekIndex(listState)
-                coroutineScope.launch {
-                    listState.animateScrollToItem(targetWeek)
-                }
-            }
-        }
-    }
-
-    // При завершении скролла - финальный snap
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (!listState.isScrollInProgress) {
-            val targetWeek = findTargetWeekIndex(listState)
-            coroutineScope.launch {
-                listState.animateScrollToItem(targetWeek)
-            }
-        }
-    }
-
-    // АВТОСКРОЛЛ К ТЕКУЩЕЙ ДАТЕ - ГАРАНТИРОВАННО РАБОЧИЙ ВАРИАНТ
     LaunchedEffect(selectedDate) {
-        // Ждем полной инициализации композиции
-        delay(500)
+        delay(1200)
 
         val cal = Calendar.getInstance().apply {
             timeInMillis = selectedDate
             firstDayOfWeek = Calendar.MONDAY
         }
 
-        // Получаем данные для расчета
         val firstDayOfMonth = cal.clone() as Calendar
         firstDayOfMonth.set(Calendar.DAY_OF_MONTH, 1)
         val firstDisplayDay = getFirstDisplayDay(firstDayOfMonth)
 
-        // Вычисляем индекс недели
         val daysDiff = ((selectedDate - firstDisplayDay.timeInMillis) / (24 * 60 * 60 * 1000)).toInt()
         val weekIndex = daysDiff / 7
 
-        // Принудительно скроллим
-        listState.scrollToItem(weekIndex)
-        delay(100)
-        listState.animateScrollToItem(weekIndex)
+        println("AUTOSCROLL DEBUG: weekIndex = $weekIndex, daysDiff = $daysDiff")
+
+        if (weekIndex >= 0) {
+            listState.animateScrollToItem(weekIndex)
+        }
+    }
+
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (!listState.isScrollInProgress) {
+            delay(50)
+            val targetWeek = findTargetWeekIndex(listState)
+            listState.animateScrollToItem(targetWeek)
+        }
     }
 
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
-            ,
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    val layoutInfo = listState.layoutInfo
+                    val visibleItems = layoutInfo.visibleItemsInfo
+
+                    if (visibleItems.isNotEmpty()) {
+                        val viewportStart = layoutInfo.viewportStartOffset
+                        val absoluteOffset = offset.x + viewportStart
+
+                        val tappedItem = visibleItems.find { item ->
+                            absoluteOffset >= item.offset && absoluteOffset <= item.offset + item.size
+                        }
+
+                        tappedItem?.let { item ->
+                            val weekIndex = item.index
+                            val cal = Calendar.getInstance().apply {
+                                timeInMillis = selectedDate
+                                firstDayOfWeek = Calendar.MONDAY
+                            }
+
+                            val firstDayOfMonth = cal.clone() as Calendar
+                            firstDayOfMonth.set(Calendar.DAY_OF_MONTH, 1)
+                            val firstDisplayDay = getFirstDisplayDay(firstDayOfMonth)
+
+                            val weekStartDay = weekIndex * 7
+                            val relativeOffset = absoluteOffset - item.offset
+                            val dayIndex = (relativeOffset / item.size * 7).toInt()
+                            val targetDayIndex = weekStartDay + dayIndex.coerceIn(0, 6)
+
+                            val targetDay = firstDisplayDay.clone() as Calendar
+                            targetDay.add(Calendar.DAY_OF_MONTH, targetDayIndex)
+
+                            val dayNumber = targetDay.get(Calendar.DAY_OF_MONTH)
+                            val isCurrentMonth = targetDay.get(Calendar.MONTH) == cal.get(Calendar.MONTH)
+
+                            if (isCurrentMonth) {
+                                onDaySelected(dayNumber)
+                            }
+                        }
+                    }
+                }
+            },
         state = listState,
-        flingBehavior = InstantSnapFlingBehavior(listState, coroutineScope),
     ) {
         val cal = Calendar.getInstance().apply {
             timeInMillis = selectedDate
@@ -142,44 +162,44 @@ fun WeekRow(
     selectedDay: Int,
     onDaySelected: (Int) -> Unit
 ) {
-    // Рассчитываем доступную ширину для одного дня
-    val dayWidth = remember {
-        Modifier.fillMaxWidth(1f / 7f) // Каждый день занимает 1/7 ширины
-    }
-
-    Row(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(),
-        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        for (i in 0 until 7) {
-            val dayIndex = if (i < week.size) week[i] else -1
+        val availableWidth = maxWidth - (Dimen.smallPlus * 12) // Отступы между днями
+        val dayWidth = availableWidth / 7
 
-            if (dayIndex != -1) {
-                val currentDay = firstDisplayDay.clone() as Calendar
-                currentDay.add(Calendar.DAY_OF_MONTH, dayIndex)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            for (i in 0 until 7) {
+                val dayIndex = if (i < week.size) week[i] else -1
 
-                val dayNumber = currentDay.get(Calendar.DAY_OF_MONTH)
-                val dayName = dateFormat.format(currentDay.time)
-                val isCurrentMonth = currentDay.get(Calendar.MONTH) == currentMonth
-                val isSelected = isCurrentMonth && dayNumber == selectedDay
+                if (dayIndex != -1) {
+                    val currentDay = firstDisplayDay.clone() as Calendar
+                    currentDay.add(Calendar.DAY_OF_MONTH, dayIndex)
 
-                DayItem(
-                    day = dayNumber,
-                    dayName = dayName,
-                    isCurrentMonth = isCurrentMonth,
-                    isSelected = isSelected,
-                    onClick = {
-                        if (isCurrentMonth) {
-                            onDaySelected(dayNumber)
-                        }
-                    },
-                    modifier = dayWidth
-                )
-            } else {
-                // Пустой спейсер тоже занимает свою долю ширины
-                Spacer(modifier = dayWidth)
+                    val dayNumber = currentDay.get(Calendar.DAY_OF_MONTH)
+                    val dayName = dateFormat.format(currentDay.time)
+                    val isCurrentMonth = currentDay.get(Calendar.MONTH) == currentMonth
+                    val isSelected = isCurrentMonth && dayNumber == selectedDay
+
+                    DayItem(
+                        day = dayNumber,
+                        dayName = dayName,
+                        isCurrentMonth = isCurrentMonth,
+                        isSelected = isSelected,
+                        onClick = {
+                            if (isCurrentMonth) {
+                                onDaySelected(dayNumber)
+                            }
+                        },
+                        modifier = Modifier.width(dayWidth)
+                    )
+                } else {
+                    Spacer(modifier = Modifier.width(dayWidth))
+                }
             }
         }
     }
@@ -196,6 +216,21 @@ class InstantSnapFlingBehavior(
             listState.animateScrollToItem(targetWeek)
         }
         return 0f
+    }
+}
+
+class NonInterceptingSnapFlingBehavior(
+    private val listState: LazyListState,
+    private val coroutineScope: CoroutineScope
+) : FlingBehavior {
+    override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
+        if (abs(initialVelocity) > 100f) {
+            val targetWeek = findTargetWeekIndex(listState)
+            coroutineScope.launch {
+                listState.animateScrollToItem(targetWeek)
+            }
+        }
+        return initialVelocity
     }
 }
 
