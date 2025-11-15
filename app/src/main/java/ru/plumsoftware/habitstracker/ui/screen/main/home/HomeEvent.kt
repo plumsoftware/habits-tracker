@@ -9,4 +9,5 @@ sealed interface HomeEvent {
     data class DeleteHabit(val habit: Habit) : HomeEvent
     data class SelectHabit(val habit: Habit?) : HomeEvent
     data class SelectDay(val day: Int) : HomeEvent
+    data class SelectDate(val date: Long) : HomeEvent
 }

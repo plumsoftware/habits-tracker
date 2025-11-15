@@ -11,27 +11,32 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import org.koin.androidx.compose.koinViewModel
 import ru.plumsoftware.habitstracker.R
 import ru.plumsoftware.habitstracker.ui.components.BottomBar
 import ru.plumsoftware.habitstracker.ui.components.CalendarView
-import ru.plumsoftware.habitstracker.ui.components.DayItem
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeEvent
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeViewModel
 import ru.plumsoftware.habitstracker.ui.theme.Dimen
@@ -39,10 +44,55 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen() {
     val viewModel: HomeViewModel = koinViewModel()
     val state by viewModel.state.collectAsState()
+    var showDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = state.selectedDate,
+        yearRange = 2020..2030
+    )
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val selectedDate = datePickerState.selectedDateMillis
+                        if (selectedDate != null) {
+                            viewModel.onEvent(HomeEvent.SelectDate(selectedDate))
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text(
+                        text = "Ок",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDatePicker = false }
+                ) {
+                    Text(
+                        text = "Отмена",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        ) {
+            DatePicker(
+                modifier = Modifier.padding(vertical = Dimen.medium),
+                state = datePickerState, // Используем запомненное состояние
+                showModeToggle = false,
+                title = null
+            )
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -93,7 +143,10 @@ fun HomeScreen() {
                         containerColor = MaterialTheme.colorScheme.surfaceContainer
                     ),
                     elevation = CardDefaults.elevatedCardElevation(0.dp, 0.dp, 0.dp),
-                    shape = CircleShape
+                    shape = CircleShape,
+                    onClick = {
+                        showDatePicker = true
+                    }
                 ) {
                     Box(
                         modifier = Modifier.fillMaxSize()
@@ -101,7 +154,7 @@ fun HomeScreen() {
                         Icon(
                             modifier = Modifier.align(Alignment.Center),
                             painter = painterResource(R.drawable.calendar_filled),
-                            contentDescription = null
+                            contentDescription = "Выбрать дату"
                         )
                     }
                 }

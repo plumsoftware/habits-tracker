@@ -33,6 +33,39 @@ class HomeViewModel(
             is HomeEvent.DeleteHabit -> deleteHabit(event.habit)
             is HomeEvent.SelectHabit -> selectHabit(event.habit)
             is HomeEvent.SelectDay -> selectDay(event.day)
+            is HomeEvent.SelectDate -> selectDate(event.date)
+        }
+    }
+
+    private fun selectDate(date: Long) {
+        val cal = Calendar.getInstance().apply {
+            timeInMillis = date
+        }
+        _state.update {
+            it.copy(
+                selectedDate = date,
+                selectedDay = cal.get(Calendar.DAY_OF_MONTH)
+            )
+        }
+
+        loadHabitsForDate(date)
+    }
+
+    private fun loadHabitsForDate(date: Long) {
+        viewModelScope.launch {
+            _state.update { it.copy(isLoading = true) }
+
+            try {
+                withContext(Dispatchers.IO) {
+
+                }
+            } catch (e: Exception) {
+                _state.update {
+                    it.copy(
+                        isLoading = false
+                    )
+                }
+            }
         }
     }
 
@@ -112,7 +145,15 @@ class HomeViewModel(
     }
 
     private fun selectDay(day: Int) {
-        _state.update { it.copy(selectedDay = day) }
+        _state.update {
+            it.copy(
+                selectedDay = day,
+                selectedDate = Calendar.getInstance().apply {
+                    timeInMillis = state.value.selectedDate
+                    set(Calendar.DAY_OF_MONTH, day)
+                }.timeInMillis
+            )
+        }
     }
 
     private fun initDate() {
