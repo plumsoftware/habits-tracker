@@ -4,9 +4,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Scaffold
-import androidx.compose.ui.Modifier
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.navigation
+import androidx.navigation.compose.rememberNavController
+import ru.plumsoftware.habitstracker.ui.screen.Route
+import ru.plumsoftware.habitstracker.ui.screen.main.HomeScreen
 import ru.plumsoftware.habitstracker.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {
@@ -15,8 +18,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             AppTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-
+                val navHost = rememberNavController()
+                NavHost(
+                    navController = navHost,
+                    startDestination = Route.Main
+                ) {
+                    composable<Route.Main> {
+                        HomeScreen()
+                    }
                 }
             }
         }
