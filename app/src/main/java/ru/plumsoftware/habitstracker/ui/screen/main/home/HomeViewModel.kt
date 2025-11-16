@@ -11,6 +11,7 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 import ru.plumsoftware.habitstracker.data.database.HabitRepository
 import ru.plumsoftware.habitstracker.data.model.Habit
+import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
 import java.util.Calendar
 import java.util.Date
 
@@ -54,65 +55,65 @@ class HomeViewModel(
         loadHabitsForDate(date)
     }
 
-    private fun loadHabitsForDate(date: Long) {
-        viewModelScope.launch {
-            _state.update { it.copy(isLoading = true) }
-
-            try {
-                repository.getHabitsWithStatus(date).collect { habitsWithStatus ->
-                    // Логируем количество загруженных привычек
-                    Log.d("HomeViewModel", "Загружено привычек: ${habitsWithStatus.size} для даты: ${Date(date)}")
-                    habitsWithStatus.forEachIndexed { index, habitWithStatus ->
-                        Log.d("HomeViewModel", "Привычка $index: ${habitWithStatus.habit.title}, выполнена: ${habitWithStatus.completed}")
-                    }
-
-                    _state.update {
-                        it.copy(
-                            habitsWithStatus = habitsWithStatus,
-                            isLoading = false
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("HomeViewModel", "Ошибка загрузки привычек: ${e.message}", e)
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = "Ошибка загрузки привычек: ${e.message}"
-                    )
-                }
-            }
-        }
-    }
-
-    private fun loadHabits() {
-        viewModelScope.launch {
-            _state.update { it.copy(isLoading = true) }
-
-            try {
-                // Загружаем привычки для текущей выбранной даты
-                repository.getHabitsWithStatus(state.value.selectedDate).collect { habitsWithStatus ->
-                    // Логируем количество загруженных привычек
-                    Log.d("HomeViewModel", "Загружено привычек в loadHabits(): ${habitsWithStatus.size}")
-
-                    _state.update {
-                        it.copy(
-                            habitsWithStatus = habitsWithStatus,
-                            isLoading = false
-                        )
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("HomeViewModel", "Ошибка загрузки привычек в loadHabits(): ${e.message}", e)
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = "Ошибка загрузки привычек: ${e.message}"
-                    )
-                }
-            }
-        }
-    }
+//    private fun loadHabitsForDate(date: Long) {
+//        viewModelScope.launch {
+//            _state.update { it.copy(isLoading = true) }
+//
+//            try {
+//                repository.getHabitsWithStatus(date).collect { habitsWithStatus ->
+//                    // Логируем количество загруженных привычек
+//                    Log.d("HomeViewModel", "Загружено привычек: ${habitsWithStatus.size} для даты: ${Date(date)}")
+//                    habitsWithStatus.forEachIndexed { index, habitWithStatus ->
+//                        Log.d("HomeViewModel", "Привычка $index: ${habitWithStatus.habit.title}, выполнена: ${habitWithStatus.completed}")
+//                    }
+//
+//                    _state.update {
+//                        it.copy(
+//                            habitsWithStatus = habitsWithStatus,
+//                            isLoading = false
+//                        )
+//                    }
+//                }
+//            } catch (e: Exception) {
+//                Log.e("HomeViewModel", "Ошибка загрузки привычек: ${e.message}", e)
+//                _state.update {
+//                    it.copy(
+//                        isLoading = false,
+//                        errorMessage = "Ошибка загрузки привычек: ${e.message}"
+//                    )
+//                }
+//            }
+//        }
+//    }
+//
+//    private fun loadHabits() {
+//        viewModelScope.launch {
+//            _state.update { it.copy(isLoading = true) }
+//
+//            try {
+//                // Загружаем привычки для текущей выбранной даты
+//                repository.getHabitsWithStatus(state.value.selectedDate).collect { habitsWithStatus ->
+//                    // Логируем количество загруженных привычек
+//                    Log.d("HomeViewModel", "Загружено привычек в loadHabits(): ${habitsWithStatus.size}")
+//
+//                    _state.update {
+//                        it.copy(
+//                            habitsWithStatus = habitsWithStatus,
+//                            isLoading = false
+//                        )
+//                    }
+//                }
+//            } catch (e: Exception) {
+//                Log.e("HomeViewModel", "Ошибка загрузки привычек в loadHabits(): ${e.message}", e)
+//                _state.update {
+//                    it.copy(
+//                        isLoading = false,
+//                        errorMessage = "Ошибка загрузки привычек: ${e.message}"
+//                    )
+//                }
+//            }
+//        }
+//    }
 
     private fun markHabitCompleted(habitId: String) {
         Log.d("HomeViewModel", "Отмечаем привычку как выполненную: $habitId")
@@ -261,6 +262,71 @@ class HomeViewModel(
     fun clearErrorMessage() {
         Log.d("HomeViewModel", "Очистка сообщения об ошибке")
         _state.update { it.copy(errorMessage = null) }
+    }
+
+    private fun sortHabitsByTime(habits: List<HabitWithStatus>): List<HabitWithStatus> {
+        return habits.sortedWith(compareBy(
+            { it.habit.reminderTimeHour },
+            { it.habit.reminderTimeMinute }
+        ))
+    }
+
+    private fun loadHabitsForDate(date: Long) {
+        viewModelScope.launch {
+            _state.update { it.copy(isLoading = true) }
+
+            try {
+                repository.getHabitsWithStatus(date).collect { habitsWithStatus ->
+                    // Сортируем привычки по времени
+                    val sortedHabits = sortHabitsByTime(habitsWithStatus)
+
+                    Log.d("HomeViewModel", "Загружено привычек: ${sortedHabits.size} для даты: ${Date(date)}")
+                    sortedHabits.forEachIndexed { index, habitWithStatus ->
+                        Log.d("HomeViewModel", "Привычка $index: ${habitWithStatus.habit.title}, время: ${habitWithStatus.habit.reminderTimeHour}:${habitWithStatus.habit.reminderTimeMinute}")
+                    }
+
+                    _state.update {
+                        it.copy(
+                            habitsWithStatus = sortedHabits,
+                            isLoading = false
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "Ошибка загрузки привычек: ${e.message}", e)
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "Ошибка загрузки привычек: ${e.message}"
+                    )
+                }
+            }
+        }
+    }
+
+    // Также обновите loadHabits() аналогичным образом
+    private fun loadHabits() {
+        viewModelScope.launch {
+            _state.update { it.copy(isLoading = true) }
+
+            try {
+                repository.getHabitsWithStatus(state.value.selectedDate).collect { habitsWithStatus ->
+                    // Сортируем привычки по времени
+                    val sortedHabits = sortHabitsByTime(habitsWithStatus)
+
+                    Log.d("HomeViewModel", "Загружено привычек в loadHabits(): ${sortedHabits.size}")
+
+                    _state.update {
+                        it.copy(
+                            habitsWithStatus = sortedHabits,
+                            isLoading = false
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                // ... обработка ошибок ...
+            }
+        }
     }
 
     companion object {

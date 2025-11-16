@@ -24,11 +24,12 @@ import ru.plumsoftware.habitstracker.ui.theme.Dimen
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimeCard(
+    time: String = "12:00",
     isClickable: Boolean,
     onSelectedTime: (Int, Int) -> Unit
 ) {
     var showTimePicker by remember { mutableStateOf(false) }
-    var selectedTime by remember { mutableStateOf("12:00") }
+    var selectedTime by remember { mutableStateOf(time) }
 
     Card(
         modifier = Modifier

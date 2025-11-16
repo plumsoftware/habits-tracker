@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,16 +34,20 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import ru.plumsoftware.habitstracker.R
+import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
 import ru.plumsoftware.habitstracker.ui.components.AddBottomSheet
 import ru.plumsoftware.habitstracker.ui.components.BottomBar
 import ru.plumsoftware.habitstracker.ui.components.CalendarView
+import ru.plumsoftware.habitstracker.ui.components.HabitCard
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeEvent
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeViewModel
 import ru.plumsoftware.habitstracker.ui.theme.Dimen
@@ -62,6 +69,27 @@ fun HomeScreen() {
         skipPartiallyExpanded = true
     )
     var showBottomSheet by remember { mutableStateOf(false) }
+
+    //Автопрокрутка до ближайшей привычки
+    val coroutineScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+
+    // Находим индекс ближайшей привычки
+    val nearestHabitIndex = remember(state.habitsWithStatus) {
+        findNearestHabitIndex(state.habitsWithStatus)
+    }
+
+    // Автоматическая прокрутка при изменении списка привычек
+    LaunchedEffect(state.habitsWithStatus, nearestHabitIndex) {
+        if (nearestHabitIndex != -1 && state.habitsWithStatus.isNotEmpty()) {
+            // Небольшая задержка для плавности
+            delay(300L)
+            listState.animateScrollToItem(
+                index = nearestHabitIndex,
+                scrollOffset = 0
+            )
+        }
+    }
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -183,6 +211,36 @@ fun HomeScreen() {
                     viewModel.onEvent(HomeEvent.SelectDay(day))
                 }
             )
+
+            Spacer(
+                modifier = Modifier.height(Dimen.large)
+            )
+
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(
+                    space = Dimen.medium,
+                    alignment = Alignment.CenterVertically
+                ),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                itemsIndexed(state.habitsWithStatus) { index, item ->
+                    HabitCard(
+                        habitWithStatus = item,
+                        onClick = {
+
+                        },
+                        onDone = { isDone ->
+                            if (isDone) {
+                                viewModel.onEvent(HomeEvent.MarkHabitCompleted(item.habit.id))
+                            } else {
+                                viewModel.onEvent(HomeEvent.UnmarkHabitCompleted(item.habit.id))
+                            }
+                        }
+                    )
+                }
+            }
         }
 
         if (showBottomSheet) {
@@ -209,4 +267,34 @@ fun getMonthTitle(selectedDate: Long): String {
     }
     val monthFormat = SimpleDateFormat("LLLL yyyy", Locale.getDefault())
     return monthFormat.format(cal.time).replaceFirstChar { it.uppercase() }
+}
+
+// Функция для поиска индекса ближайшей привычки
+private fun findNearestHabitIndex(habits: List<HabitWithStatus>): Int {
+    if (habits.isEmpty()) return -1
+
+    val currentTime = Calendar.getInstance()
+    val currentHour = currentTime.get(Calendar.HOUR_OF_DAY)
+    val currentMinute = currentTime.get(Calendar.MINUTE)
+    val currentTotalMinutes = currentHour * 60 + currentMinute
+
+    var nearestIndex = 0
+    var minTimeDifference = Int.MAX_VALUE
+
+    habits.forEachIndexed { index, habitWithStatus ->
+        val habitTotalMinutes = habitWithStatus.habit.reminderTimeHour * 60 + habitWithStatus.habit.reminderTimeMinute
+        var timeDifference = habitTotalMinutes - currentTotalMinutes
+
+        // Если время привычки уже прошло сегодня, учитываем её на завтра
+        if (timeDifference < 0) {
+            timeDifference += 24 * 60 // Добавляем сутки в минутах
+        }
+
+        if (timeDifference < minTimeDifference) {
+            minTimeDifference = timeDifference
+            nearestIndex = index
+        }
+    }
+
+    return nearestIndex
 }

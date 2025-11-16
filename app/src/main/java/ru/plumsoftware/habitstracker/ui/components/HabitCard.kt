@@ -1,6 +1,7 @@
 package ru.plumsoftware.habitstracker.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,71 +19,82 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import ru.plumsoftware.habitstracker.data.model.Habit
+import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
 import ru.plumsoftware.habitstracker.ui.theme.Dimen
 import ru.plumsoftware.habitstracker.ui.theme.doneHabitColor
 
 @Composable
 fun HabitCard(
-    habit: Habit,
+    habitWithStatus: HabitWithStatus,
     onClick: (Habit) -> Unit,
     onDone: (Boolean) -> Unit
 ) {
-    var isDone by rememberSaveable { mutableStateOf(false) }
+    var isDone by rememberSaveable { mutableStateOf(habitWithStatus.completed ?: false) }
 
     Card(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(all = Dimen.medium),
+            .fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = if (isDone) doneHabitColor else MaterialTheme.colorScheme.surfaceContainer
         ),
         shape = MaterialTheme.shapes.medium
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Dimen.large, vertical = Dimen.large),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
                 modifier = Modifier.wrapContentSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
+                horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.spacedBy(
-                    space = Dimen.large,
+                    space = Dimen.medium,
                     alignment = Alignment.CenterVertically
                 )
             ) {
                 TimeCard(
+                    time = "${habitWithStatus.habit.reminderTimeHour}:${if (habitWithStatus.habit.reminderTimeMinute == 0) "00" else habitWithStatus.habit.reminderTimeMinute}",
                     isClickable = false,
                     onSelectedTime = { _, _ -> }
                 )
 
                 Column(
                     modifier = Modifier.wrapContentSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                    horizontalAlignment = Alignment.Start,
                     verticalArrangement = Arrangement.spacedBy(
-                        space = Dimen.medium,
+                        space = Dimen.small,
                         alignment = Alignment.CenterVertically
                     )
                 ) {
                     Text(
-                        text = habit.title,
-                        style = MaterialTheme.typography.headlineMedium
+                        text = habitWithStatus.habit.title.trim(),
+                        style = MaterialTheme.typography.titleLarge
                     )
                     Text(
-                        text = habit.body,
-                        style = MaterialTheme.typography.headlineSmall.copy(color = MaterialTheme.colorScheme.outline)
+                        text = habitWithStatus.habit.body.trim(),
+                        style = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.outline)
                     )
                 }
             }
 
-            Checkbox(
-                checked = isDone,
-                onCheckedChange = {
-                    isDone = it
-                    onDone(it)
-                }
+            Box(
+                modifier = Modifier
+                    .wrapContentSize()
+                    .clip(shape = MaterialTheme.shapes.small)
             )
+            {
+                Checkbox(
+                    checked = isDone,
+                    onCheckedChange = {
+                        isDone = it
+                        onDone(it)
+                    }
+                )
+            }
         }
     }
 }
