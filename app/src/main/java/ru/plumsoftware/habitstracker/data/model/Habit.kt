@@ -11,5 +11,8 @@ data class Habit(
     val body: String,
     val periodicity: Periodicity,
     val creationDate: Long,
-    val targetCount: Int = 1 // Количество выполнений за период
+    val targetCount: Int = 1, // Количество выполнений за период
+    val reminderTimeHour: Int,
+    val reminderTimeMinute: Int,
+    val reminderInterval: Int
 )

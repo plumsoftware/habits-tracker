@@ -25,4 +25,11 @@ interface HabitCompletionDao {
 
     @Query("SELECT * FROM habit_completions WHERE habitId = :habitId")
     suspend fun getAllCompletionsForHabit(habitId: String): List<HabitCompletion>
+
+    @Query("""
+        SELECT * FROM habit_completions 
+        WHERE habitId = :habitId 
+        AND completionDate BETWEEN :periodStart AND :periodEnd
+    """)
+    suspend fun getCompletionForPeriod(habitId: String, periodStart: Long, periodEnd: Long): List<HabitCompletion>
 }

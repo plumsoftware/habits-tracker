@@ -32,10 +32,9 @@ interface HabitDao {
     @Query("SELECT * FROM habits WHERE periodicity = :periodicity")
     fun getHabitsByPeriodicity(periodicity: Int): Flow<List<Habit>>
 
-    // ДОБАВЛЯЕМ НОВЫЕ МЕТОДЫ:
-
     /**
-     * Получить привычки со статусом на дату (Flow версия)
+     * Получить привычки со статусом на дату, которые активны на эту дату
+     * (дата создания привычки <= выбранной даты)
      */
     @Transaction
     @Query("""
@@ -43,6 +42,7 @@ interface HabitDao {
         FROM habits 
         LEFT JOIN habit_completions ON habits.id = habit_completions.habitId 
         AND habit_completions.completionDate = :date
+        WHERE habits.creationDate <= :date
     """)
     fun getHabitsWithStatus(date: Long): Flow<List<HabitWithStatus>>
 
@@ -56,6 +56,20 @@ interface HabitDao {
         LEFT JOIN habit_completions ON habits.id = habit_completions.habitId 
         AND habit_completions.completionDate = :date
         WHERE habits.periodicity = :periodicity
+        AND habits.creationDate <= :date
     """)
     fun getHabitsWithStatusByPeriodicity(date: Long, periodicity: Periodicity): Flow<List<HabitWithStatus>>
+
+    /**
+     * Новый метод DAO без фильтрации по периодичности
+     */
+    @Transaction
+    @Query("""
+        SELECT habits.*, habit_completions.completed 
+        FROM habits 
+        LEFT JOIN habit_completions ON habits.id = habit_completions.habitId 
+        AND habit_completions.completionDate = :date
+        WHERE habits.creationDate <= :date
+    """)
+    fun getAllHabitsWithCompletions(date: Long): Flow<List<HabitWithStatus>>
 }

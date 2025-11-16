@@ -19,11 +19,14 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +38,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import org.koin.androidx.compose.koinViewModel
 import ru.plumsoftware.habitstracker.R
+import ru.plumsoftware.habitstracker.ui.components.AddBottomSheet
 import ru.plumsoftware.habitstracker.ui.components.BottomBar
 import ru.plumsoftware.habitstracker.ui.components.CalendarView
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeEvent
@@ -54,6 +58,10 @@ fun HomeScreen() {
         initialSelectedDateMillis = state.selectedDate,
         yearRange = 2020..2030
     )
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
+    var showBottomSheet by remember { mutableStateOf(false) }
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -97,7 +105,11 @@ fun HomeScreen() {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            BottomBar()
+            BottomBar(
+                onAdd = {
+                    showBottomSheet = true
+                }
+            )
         }
     ) { innerPadding ->
         Column(
@@ -171,6 +183,21 @@ fun HomeScreen() {
                     viewModel.onEvent(HomeEvent.SelectDay(day))
                 }
             )
+        }
+
+        if (showBottomSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showBottomSheet = false },
+                sheetState = sheetState,
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                AddBottomSheet(
+                    onSaveHabit = { habit ->
+                        viewModel.onEvent(HomeEvent.AddHabit(habit = habit))
+                        showBottomSheet = false
+                    }
+                )
+            }
         }
     }
 }

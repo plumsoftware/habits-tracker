@@ -53,8 +53,8 @@ fun HabitCard(
                 )
             ) {
                 TimeCard(
-                    time = "07:30",
-                    onClick = {}
+                    isClickable = false,
+                    onSelectedTime = { _, _ -> }
                 )
 
                 Column(

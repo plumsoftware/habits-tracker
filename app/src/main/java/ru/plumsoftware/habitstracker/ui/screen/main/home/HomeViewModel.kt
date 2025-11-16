@@ -1,18 +1,18 @@
 package ru.plumsoftware.habitstracker.ui.screen.main.home
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 import ru.plumsoftware.habitstracker.data.database.HabitRepository
 import ru.plumsoftware.habitstracker.data.model.Habit
 import java.util.Calendar
+import java.util.Date
 
 class HomeViewModel(
     private val repository: HabitRepository
@@ -60,6 +60,12 @@ class HomeViewModel(
 
             try {
                 repository.getHabitsWithStatus(date).collect { habitsWithStatus ->
+                    // Логируем количество загруженных привычек
+                    Log.d("HomeViewModel", "Загружено привычек: ${habitsWithStatus.size} для даты: ${Date(date)}")
+                    habitsWithStatus.forEachIndexed { index, habitWithStatus ->
+                        Log.d("HomeViewModel", "Привычка $index: ${habitWithStatus.habit.title}, выполнена: ${habitWithStatus.completed}")
+                    }
+
                     _state.update {
                         it.copy(
                             habitsWithStatus = habitsWithStatus,
@@ -68,6 +74,7 @@ class HomeViewModel(
                     }
                 }
             } catch (e: Exception) {
+                Log.e("HomeViewModel", "Ошибка загрузки привычек: ${e.message}", e)
                 _state.update {
                     it.copy(
                         isLoading = false,
@@ -85,6 +92,9 @@ class HomeViewModel(
             try {
                 // Загружаем привычки для текущей выбранной даты
                 repository.getHabitsWithStatus(state.value.selectedDate).collect { habitsWithStatus ->
+                    // Логируем количество загруженных привычек
+                    Log.d("HomeViewModel", "Загружено привычек в loadHabits(): ${habitsWithStatus.size}")
+
                     _state.update {
                         it.copy(
                             habitsWithStatus = habitsWithStatus,
@@ -93,6 +103,7 @@ class HomeViewModel(
                     }
                 }
             } catch (e: Exception) {
+                Log.e("HomeViewModel", "Ошибка загрузки привычек в loadHabits(): ${e.message}", e)
                 _state.update {
                     it.copy(
                         isLoading = false,
@@ -104,11 +115,14 @@ class HomeViewModel(
     }
 
     private fun markHabitCompleted(habitId: String) {
+        Log.d("HomeViewModel", "Отмечаем привычку как выполненную: $habitId")
         viewModelScope.launch {
             try {
                 repository.markHabitCompleted(habitId, state.value.selectedDate)
+                Log.d("HomeViewModel", "Привычка $habitId успешно отмечена как выполненная")
                 // Данные автоматически обновятся через Flow
             } catch (e: Exception) {
+                Log.e("HomeViewModel", "Ошибка отметки привычки $habitId: ${e.message}", e)
                 _state.update {
                     it.copy(
                         errorMessage = "Ошибка отметки привычки: ${e.message}"
@@ -119,11 +133,14 @@ class HomeViewModel(
     }
 
     private fun unmarkHabitCompleted(habitId: String) {
+        Log.d("HomeViewModel", "Снимаем отметку выполнения с привычки: $habitId")
         viewModelScope.launch {
             try {
                 repository.unmarkHabitCompleted(habitId, state.value.selectedDate)
+                Log.d("HomeViewModel", "Отметка с привычки $habitId успешно снята")
                 // Данные автоматически обновятся через Flow
             } catch (e: Exception) {
+                Log.e("HomeViewModel", "Ошибка снятия отметки с привычки $habitId: ${e.message}", e)
                 _state.update {
                     it.copy(
                         errorMessage = "Ошибка снятия отметки: ${e.message}"
@@ -134,14 +151,17 @@ class HomeViewModel(
     }
 
     private fun addHabit(habit: Habit) {
+        Log.d("HomeViewModel", "Добавляем новую привычку: ${habit.title}")
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
 
             try {
                 repository.insertHabit(habit)
+                Log.d("HomeViewModel", "Привычка '${habit.title}' успешно добавлена")
                 // После добавления привычки перезагружаем список для текущей даты
                 loadHabitsForDate(state.value.selectedDate)
             } catch (e: Exception) {
+                Log.e("HomeViewModel", "Ошибка добавления привычки '${habit.title}': ${e.message}", e)
                 _state.update {
                     it.copy(
                         isLoading = false,
@@ -153,14 +173,17 @@ class HomeViewModel(
     }
 
     private fun updateHabit(habit: Habit) {
+        Log.d("HomeViewModel", "Обновляем привычку: ${habit.title}")
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
 
             try {
                 repository.updateHabit(habit)
+                Log.d("HomeViewModel", "Привычка '${habit.title}' успешно обновлена")
                 // После обновления привычки перезагружаем список для текущей даты
                 loadHabitsForDate(state.value.selectedDate)
             } catch (e: Exception) {
+                Log.e("HomeViewModel", "Ошибка обновления привычки '${habit.title}': ${e.message}", e)
                 _state.update {
                     it.copy(
                         isLoading = false,
@@ -172,17 +195,20 @@ class HomeViewModel(
     }
 
     private fun deleteHabit(habit: Habit) {
+        Log.d("HomeViewModel", "Удаляем привычку: ${habit.title}")
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
 
             try {
                 repository.deleteHabit(habit)
+                Log.d("HomeViewModel", "Привычка '${habit.title}' успешно удалена")
                 if (_state.value.selectedHabit?.id == habit.id) {
                     _state.update { it.copy(selectedHabit = null) }
                 }
                 // После удаления привычки перезагружаем список для текущей даты
                 loadHabitsForDate(state.value.selectedDate)
             } catch (e: Exception) {
+                Log.e("HomeViewModel", "Ошибка удаления привычки '${habit.title}': ${e.message}", e)
                 _state.update {
                     it.copy(
                         isLoading = false,
@@ -194,10 +220,12 @@ class HomeViewModel(
     }
 
     private fun selectHabit(habit: Habit?) {
+        Log.d("HomeViewModel", "Выбрана привычка: ${habit?.title ?: "null"}")
         _state.update { it.copy(selectedHabit = habit) }
     }
 
     private fun selectDay(day: Int) {
+        Log.d("HomeViewModel", "Выбран день: $day")
         val calendar = Calendar.getInstance().apply {
             timeInMillis = state.value.selectedDate
             set(Calendar.DAY_OF_MONTH, day)
@@ -218,6 +246,7 @@ class HomeViewModel(
         val cal = Calendar.getInstance().apply {
             timeInMillis = currentDate
         }
+        Log.d("HomeViewModel", "Инициализация даты: ${Date(currentDate)}")
         _state.update {
             it.copy(
                 selectedDate = currentDate,
@@ -230,6 +259,7 @@ class HomeViewModel(
     }
 
     fun clearErrorMessage() {
+        Log.d("HomeViewModel", "Очистка сообщения об ошибке")
         _state.update { it.copy(errorMessage = null) }
     }
 

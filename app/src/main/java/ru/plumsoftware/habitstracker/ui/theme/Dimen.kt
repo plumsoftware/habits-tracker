@@ -8,7 +8,7 @@ object Dimen {
     val medium = 10.dp
     val mediumPlus = 12.dp
     val large = 14.dp
-    val extraLarge = 24.dp
+    val extraLarge = 18.dp
 
     val bottomBarIconSize = 28.dp
 

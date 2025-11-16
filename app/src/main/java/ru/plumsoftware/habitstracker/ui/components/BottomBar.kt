@@ -14,6 +14,7 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -30,8 +31,11 @@ import androidx.compose.ui.unit.dp
 import ru.plumsoftware.habitstracker.R
 import ru.plumsoftware.habitstracker.ui.theme.Dimen
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BottomBar() {
+fun BottomBar(
+    onAdd: () -> Unit
+) {
     var selected by rememberSaveable { mutableIntStateOf(0) }
 
     BottomAppBar(
@@ -83,7 +87,10 @@ fun BottomBar() {
                     pressedElevation = 0.dp,
                     focusedElevation = 0.dp
                 ),
-                shape = MaterialTheme.shapes.medium
+                shape = MaterialTheme.shapes.medium,
+                onClick = {
+                    onAdd()
+                }
             ) {
                 Icon(
                     modifier = Modifier.align(Alignment.CenterHorizontally).padding(all = Dimen.medium),
