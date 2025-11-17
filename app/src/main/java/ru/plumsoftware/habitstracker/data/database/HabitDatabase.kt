@@ -9,11 +9,13 @@ import org.koin.dsl.module
 import ru.plumsoftware.habitstracker.data.model.Converters
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitCompletion
+import ru.plumsoftware.habitstracker.data.model.Notification
 import ru.plumsoftware.habitstracker.data.model.dao.HabitCompletionDao
 import ru.plumsoftware.habitstracker.data.model.dao.HabitDao
+import ru.plumsoftware.habitstracker.data.model.dao.NotificationsDao
 
 @Database(
-    entities = [Habit::class, HabitCompletion::class],
+    entities = [Habit::class, HabitCompletion::class, Notification::class],
     version = 1,
     exportSchema = false
 )
@@ -21,6 +23,7 @@ import ru.plumsoftware.habitstracker.data.model.dao.HabitDao
 abstract class HabitDatabase : RoomDatabase() {
     abstract fun habitDao(): HabitDao
     abstract fun habitCompletionDao(): HabitCompletionDao
+    abstract fun notificationsDao(): NotificationsDao
 
     companion object {
         val databaseModule = module {
@@ -39,6 +42,10 @@ abstract class HabitDatabase : RoomDatabase() {
 
             single<HabitCompletionDao> {
                 get<HabitDatabase>().habitCompletionDao()
+            }
+
+            single<NotificationsDao> {
+                get<HabitDatabase>().notificationsDao()
             }
         }
     }

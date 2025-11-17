@@ -50,6 +50,7 @@ import ru.plumsoftware.habitstracker.ui.components.CalendarView
 import ru.plumsoftware.habitstracker.ui.components.HabitCard
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeEvent
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeViewModel
+import ru.plumsoftware.habitstracker.ui.screen.main.notifications.NotificationScreen
 import ru.plumsoftware.habitstracker.ui.screen.main.settings.SettingsScreen
 import ru.plumsoftware.habitstracker.ui.screen.main.settings.SettingsViewModel
 import ru.plumsoftware.habitstracker.ui.theme.Dimen
@@ -150,6 +151,7 @@ fun HomeScreen(
                         }
                     )
                 }
+
                 MainScreenStates.Statistics -> {}
             }
         },
@@ -268,9 +270,11 @@ fun HomeScreen(
                     }
                 }
             }
-            MainScreenStates.Notifications -> {
 
+            MainScreenStates.Notifications -> {
+                NotificationScreen()
             }
+
             MainScreenStates.Settings -> {
                 SettingsScreen(
                     padding = innerPadding,
@@ -278,6 +282,7 @@ fun HomeScreen(
                     isDark = isDarkTheme
                 )
             }
+
             MainScreenStates.Statistics -> {
 
             }
@@ -322,7 +327,8 @@ private fun findNearestHabitIndex(habits: List<HabitWithStatus>): Int {
     var minTimeDifference = Int.MAX_VALUE
 
     habits.forEachIndexed { index, habitWithStatus ->
-        val habitTotalMinutes = habitWithStatus.habit.reminderTimeHour * 60 + habitWithStatus.habit.reminderTimeMinute
+        val habitTotalMinutes =
+            habitWithStatus.habit.reminderTimeHour * 60 + habitWithStatus.habit.reminderTimeMinute
         var timeDifference = habitTotalMinutes - currentTotalMinutes
 
         // Если время привычки уже прошло сегодня, учитываем её на завтра

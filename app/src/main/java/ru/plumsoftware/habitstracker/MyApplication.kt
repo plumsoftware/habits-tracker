@@ -13,6 +13,7 @@ import ru.plumsoftware.habitstracker.data.database.HabitDatabase
 import ru.plumsoftware.habitstracker.data.database.HabitRepository
 import ru.plumsoftware.habitstracker.data.settings.ThemeRepository
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeViewModel
+import ru.plumsoftware.habitstracker.ui.screen.main.notifications.NotificationsViewModel
 import ru.plumsoftware.habitstracker.ui.screen.main.settings.SettingsViewModel
 
 class MyApplication : Application() {
@@ -38,7 +39,8 @@ class MyApplication : Application() {
                     HomeViewModel.viewModelModule,
                     dataStoreModule,
                     ThemeRepository.themeRepositoryModule,
-                    SettingsViewModel.settingsViewModelModule
+                    SettingsViewModel.settingsViewModelModule,
+                    NotificationsViewModel.viewModelModule
                 )
             )
         }
