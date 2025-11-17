@@ -158,8 +158,12 @@ class HomeViewModel(
             _state.update { it.copy(isLoading = true) }
 
             try {
-                repository.insertHabit(habit)
-                Log.d("HomeViewModel", "Привычка '${habit.title}' успешно добавлена")
+                // Создаем копию привычки с выбранной датой создания
+                val habitWithSelectedDate = habit.copy(
+                    creationDate = getStartOfDay(state.value.selectedDate)
+                )
+                repository.insertHabit(habitWithSelectedDate)
+                Log.d("HomeViewModel", "Привычка '${habit.title}' успешно добавлена с датой создания: ${Date(state.value.selectedDate)}")
                 // После добавления привычки перезагружаем список для текущей даты
                 loadHabitsForDate(state.value.selectedDate)
             } catch (e: Exception) {
@@ -328,6 +332,17 @@ class HomeViewModel(
                 // ... обработка ошибок ...
             }
         }
+    }
+
+    private fun getStartOfDay(timestamp: Long = System.currentTimeMillis()): Long {
+        val calendar = Calendar.getInstance().apply {
+            timeInMillis = timestamp
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        return calendar.timeInMillis
     }
 
     companion object {
