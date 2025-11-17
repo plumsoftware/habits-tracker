@@ -2,6 +2,7 @@ package ru.plumsoftware.habitstracker.ui.screen.main.home
 
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
+import ru.plumsoftware.habitstracker.ui.screen.main.MainScreenStates
 
 data class HomeState(
     val habitsWithStatus: List<HabitWithStatus> = emptyList(),
@@ -10,5 +11,6 @@ data class HomeState(
     val selectedHabit: Habit? = null,
     val selectedDay: Int = 0,
     val selectedMonth: Int = 0,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val mainScreenState: MainScreenStates = MainScreenStates.Home
 )

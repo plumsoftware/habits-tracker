@@ -134,112 +134,127 @@ fun HomeScreen() {
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
             BottomBar(
+                viewModel = viewModel,
                 onAdd = {
                     showBottomSheet = true
                 }
             )
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = Dimen.medium)
-                .padding(top = Dimen.large),
-            verticalArrangement = Arrangement.spacedBy(
-                space = Dimen.medium,
-                alignment = Alignment.Top
-            ),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+
+        when (state.mainScreenState) {
+            MainScreenStates.Home -> {
                 Column(
                     modifier = Modifier
-                        .wrapContentSize(),
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(horizontal = Dimen.medium)
+                        .padding(top = Dimen.large),
                     verticalArrangement = Arrangement.spacedBy(
                         space = Dimen.medium,
                         alignment = Alignment.Top
                     ),
-                    horizontalAlignment = Alignment.Start
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = getMonthTitle(state.selectedDate),
-                        style = MaterialTheme.typography.titleLarge
-                    )
-
-                    Text(
-                        text = "Привычки на сегодня",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-
-                Card(
-                    modifier = Modifier.size(44.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer
-                    ),
-                    elevation = CardDefaults.elevatedCardElevation(0.dp, 0.dp, 0.dp),
-                    shape = CircleShape,
-                    onClick = {
-                        showDatePicker = true
-                    }
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Icon(
-                            modifier = Modifier.align(Alignment.Center),
-                            painter = painterResource(R.drawable.calendar_filled),
-                            contentDescription = "Выбрать дату"
-                        )
+                        Column(
+                            modifier = Modifier
+                                .wrapContentSize(),
+                            verticalArrangement = Arrangement.spacedBy(
+                                space = Dimen.medium,
+                                alignment = Alignment.Top
+                            ),
+                            horizontalAlignment = Alignment.Start
+                        ) {
+                            Text(
+                                text = getMonthTitle(state.selectedDate),
+                                style = MaterialTheme.typography.titleLarge
+                            )
+
+                            Text(
+                                text = "Привычки на сегодня",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+
+                        Card(
+                            modifier = Modifier.size(44.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                            ),
+                            elevation = CardDefaults.elevatedCardElevation(0.dp, 0.dp, 0.dp),
+                            shape = CircleShape,
+                            onClick = {
+                                showDatePicker = true
+                            }
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Icon(
+                                    modifier = Modifier.align(Alignment.Center),
+                                    painter = painterResource(R.drawable.calendar_filled),
+                                    contentDescription = "Выбрать дату"
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(
+                        modifier = Modifier.height(Dimen.medium)
+                    )
+
+                    CalendarView(
+                        selectedDate = state.selectedDate,
+                        selectedDay = state.selectedDay,
+                        onDaySelected = { day ->
+                            viewModel.onEvent(HomeEvent.SelectDay(day))
+                        }
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(Dimen.large)
+                    )
+
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(
+                            space = Dimen.medium,
+                            alignment = Alignment.CenterVertically
+                        ),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        itemsIndexed(state.habitsWithStatus) { index, item ->
+                            HabitCard(
+                                habitWithStatus = item,
+                                onClick = {
+
+                                },
+                                onDone = { isDone ->
+                                    if (isDone) {
+                                        viewModel.onEvent(HomeEvent.MarkHabitCompleted(item.habit.id))
+                                    } else {
+                                        viewModel.onEvent(HomeEvent.UnmarkHabitCompleted(item.habit.id))
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
+            MainScreenStates.Notifications -> {
 
-            Spacer(
-                modifier = Modifier.height(Dimen.medium)
-            )
+            }
+            MainScreenStates.Settings -> {
 
-            CalendarView(
-                selectedDate = state.selectedDate,
-                selectedDay = state.selectedDay,
-                onDaySelected = { day ->
-                    viewModel.onEvent(HomeEvent.SelectDay(day))
-                }
-            )
+            }
+            MainScreenStates.Statistics -> {
 
-            Spacer(
-                modifier = Modifier.height(Dimen.large)
-            )
-
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(
-                    space = Dimen.medium,
-                    alignment = Alignment.CenterVertically
-                ),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                itemsIndexed(state.habitsWithStatus) { index, item ->
-                    HabitCard(
-                        habitWithStatus = item,
-                        onClick = {
-
-                        },
-                        onDone = { isDone ->
-                            if (isDone) {
-                                viewModel.onEvent(HomeEvent.MarkHabitCompleted(item.habit.id))
-                            } else {
-                                viewModel.onEvent(HomeEvent.UnmarkHabitCompleted(item.habit.id))
-                            }
-                        }
-                    )
-                }
             }
         }
 

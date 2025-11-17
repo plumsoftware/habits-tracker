@@ -29,11 +29,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import ru.plumsoftware.habitstracker.R
+import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeEvent
+import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeViewModel
 import ru.plumsoftware.habitstracker.ui.theme.Dimen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BottomBar(
+    viewModel: HomeViewModel,
     onAdd: () -> Unit
 ) {
     var selected by rememberSaveable { mutableIntStateOf(0) }
@@ -55,6 +58,7 @@ fun BottomBar(
                         role = Role.Button,
                         onClick = {
                             selected = 0
+                            viewModel.onEvent(HomeEvent.OnHome)
                         }
                     ),
                 painter = if (selected == 0) painterResource(R.drawable.house_fill) else painterResource(
@@ -71,6 +75,7 @@ fun BottomBar(
                         role = Role.Button,
                         onClick = {
                             selected = 1
+                            viewModel.onEvent(HomeEvent.OnSettings)
                         }
                     ),
                 imageVector = if (selected == 1) Icons.Rounded.Settings else Icons.Outlined.Settings,
@@ -108,6 +113,7 @@ fun BottomBar(
                         role = Role.Button,
                         onClick = {
                             selected = 2
+                            viewModel.onEvent(HomeEvent.OnStatistic)
                         }
                     ),
                 painter = if (selected == 2) painterResource(R.drawable.statistic_filled) else painterResource(
@@ -124,6 +130,7 @@ fun BottomBar(
                         role = Role.Button,
                         onClick = {
                             selected = 3
+                            viewModel.onEvent(HomeEvent.OnNotifications)
                         }
                     ),
                 imageVector = if (selected == 3) Icons.Rounded.Notifications else Icons.Outlined.Notifications,

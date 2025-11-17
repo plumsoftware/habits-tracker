@@ -12,4 +12,9 @@ sealed interface HomeEvent {
     data class SelectDate(val date: Long) : HomeEvent
     data class MarkHabitCompleted(val habitId: String) : HomeEvent
     data class UnmarkHabitCompleted(val habitId: String) : HomeEvent
+
+    data object OnHome: HomeEvent
+    data object OnStatistic: HomeEvent
+    data object OnSettings: HomeEvent
+    data object OnNotifications: HomeEvent
 }

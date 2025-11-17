@@ -12,7 +12,7 @@ import org.koin.dsl.module
 import ru.plumsoftware.habitstracker.data.database.HabitRepository
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
-import ru.plumsoftware.habitstracker.getStartOfDay
+import ru.plumsoftware.habitstracker.ui.screen.main.MainScreenStates
 import java.util.Calendar
 import java.util.Date
 
@@ -38,6 +38,18 @@ class HomeViewModel(
             is HomeEvent.SelectDate -> selectDate(event.date)
             is HomeEvent.MarkHabitCompleted -> markHabitCompleted(event.habitId)
             is HomeEvent.UnmarkHabitCompleted -> unmarkHabitCompleted(event.habitId)
+            HomeEvent.OnHome -> onMainScreenStateChange(MainScreenStates.Home)
+            HomeEvent.OnNotifications -> onMainScreenStateChange(MainScreenStates.Notifications)
+            HomeEvent.OnSettings -> onMainScreenStateChange(MainScreenStates.Statistics)
+            HomeEvent.OnStatistic -> onMainScreenStateChange(MainScreenStates.Settings)
+        }
+    }
+
+    private fun onMainScreenStateChange(mainScreenStates: MainScreenStates) {
+        _state.update {
+            it.copy(
+                mainScreenState = mainScreenStates
+            )
         }
     }
 
@@ -163,11 +175,18 @@ class HomeViewModel(
                     creationDate = getStartOfDay(state.value.selectedDate)
                 )
                 repository.insertHabit(habitWithSelectedDate)
-                Log.d("HomeViewModel", "Привычка '${habit.title}' успешно добавлена с датой создания: ${Date(state.value.selectedDate)}")
+                Log.d(
+                    "HomeViewModel",
+                    "Привычка '${habit.title}' успешно добавлена с датой создания: ${Date(state.value.selectedDate)}"
+                )
                 // После добавления привычки перезагружаем список для текущей даты
                 loadHabitsForDate(state.value.selectedDate)
             } catch (e: Exception) {
-                Log.e("HomeViewModel", "Ошибка добавления привычки '${habit.title}': ${e.message}", e)
+                Log.e(
+                    "HomeViewModel",
+                    "Ошибка добавления привычки '${habit.title}': ${e.message}",
+                    e
+                )
                 _state.update {
                     it.copy(
                         isLoading = false,
@@ -189,7 +208,11 @@ class HomeViewModel(
                 // После обновления привычки перезагружаем список для текущей даты
                 loadHabitsForDate(state.value.selectedDate)
             } catch (e: Exception) {
-                Log.e("HomeViewModel", "Ошибка обновления привычки '${habit.title}': ${e.message}", e)
+                Log.e(
+                    "HomeViewModel",
+                    "Ошибка обновления привычки '${habit.title}': ${e.message}",
+                    e
+                )
                 _state.update {
                     it.copy(
                         isLoading = false,
@@ -270,7 +293,8 @@ class HomeViewModel(
     }
 
     private fun sortHabitsByTime(habits: List<HabitWithStatus>): List<HabitWithStatus> {
-        return habits.sortedWith(compareBy(
+        return habits.sortedWith(
+            compareBy(
             { it.habit.reminderTimeHour },
             { it.habit.reminderTimeMinute }
         ))
@@ -285,7 +309,10 @@ class HomeViewModel(
                 Log.d("HomeViewModel", "Начинаем загрузку привычек для даты: ${Date(startOfDay)}")
 
                 repository.getHabitsWithStatus(startOfDay).collect { habitsWithStatus ->
-                    Log.d("HomeViewModel", "Получено привычек из репозитория: ${habitsWithStatus.size}")
+                    Log.d(
+                        "HomeViewModel",
+                        "Получено привычек из репозитория: ${habitsWithStatus.size}"
+                    )
 
                     val sortedHabits = sortHabitsByTime(habitsWithStatus)
                     Log.d("HomeViewModel", "После сортировки: ${sortedHabits.size} привычек")
@@ -315,19 +342,23 @@ class HomeViewModel(
             _state.update { it.copy(isLoading = true) }
 
             try {
-                repository.getHabitsWithStatus(state.value.selectedDate).collect { habitsWithStatus ->
-                    // Сортируем привычки по времени
-                    val sortedHabits = sortHabitsByTime(habitsWithStatus)
+                repository.getHabitsWithStatus(state.value.selectedDate)
+                    .collect { habitsWithStatus ->
+                        // Сортируем привычки по времени
+                        val sortedHabits = sortHabitsByTime(habitsWithStatus)
 
-                    Log.d("HomeViewModel", "Загружено привычек в loadHabits(): ${sortedHabits.size}")
-
-                    _state.update {
-                        it.copy(
-                            habitsWithStatus = sortedHabits,
-                            isLoading = false
+                        Log.d(
+                            "HomeViewModel",
+                            "Загружено привычек в loadHabits(): ${sortedHabits.size}"
                         )
+
+                        _state.update {
+                            it.copy(
+                                habitsWithStatus = sortedHabits,
+                                isLoading = false
+                            )
+                        }
                     }
-                }
             } catch (e: Exception) {
                 // ... обработка ошибок ...
             }
