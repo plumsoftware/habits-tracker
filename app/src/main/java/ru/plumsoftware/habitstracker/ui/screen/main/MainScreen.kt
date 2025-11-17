@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,7 +35,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +50,8 @@ import ru.plumsoftware.habitstracker.ui.components.CalendarView
 import ru.plumsoftware.habitstracker.ui.components.HabitCard
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeEvent
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeViewModel
+import ru.plumsoftware.habitstracker.ui.screen.main.settings.SettingsScreen
+import ru.plumsoftware.habitstracker.ui.screen.main.settings.SettingsViewModel
 import ru.plumsoftware.habitstracker.ui.theme.Dimen
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -57,7 +59,10 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen() {
+fun HomeScreen(
+    settingsViewModel: SettingsViewModel,
+    isDarkTheme: Boolean
+) {
     val viewModel: HomeViewModel = koinViewModel()
     val state by viewModel.state.collectAsState()
     var showDatePicker by remember { mutableStateOf(false) }
@@ -71,7 +76,6 @@ fun HomeScreen() {
     var showBottomSheet by remember { mutableStateOf(false) }
 
     //Автопрокрутка до ближайшей привычки
-    val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
     // Находим индекс ближайшей привычки
@@ -132,6 +136,23 @@ fun HomeScreen() {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        topBar = {
+            when (state.mainScreenState) {
+                MainScreenStates.Home -> {}
+                MainScreenStates.Notifications -> {}
+                MainScreenStates.Settings -> {
+                    CenterAlignedTopAppBar(
+                        title = {
+                            Text(
+                                text = "Настройки",
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                        }
+                    )
+                }
+                MainScreenStates.Statistics -> {}
+            }
+        },
         bottomBar = {
             BottomBar(
                 viewModel = viewModel,
@@ -251,7 +272,11 @@ fun HomeScreen() {
 
             }
             MainScreenStates.Settings -> {
-
+                SettingsScreen(
+                    padding = innerPadding,
+                    settingsViewModel = settingsViewModel,
+                    isDark = isDarkTheme
+                )
             }
             MainScreenStates.Statistics -> {
 

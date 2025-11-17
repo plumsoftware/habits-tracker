@@ -40,8 +40,8 @@ class HomeViewModel(
             is HomeEvent.UnmarkHabitCompleted -> unmarkHabitCompleted(event.habitId)
             HomeEvent.OnHome -> onMainScreenStateChange(MainScreenStates.Home)
             HomeEvent.OnNotifications -> onMainScreenStateChange(MainScreenStates.Notifications)
-            HomeEvent.OnSettings -> onMainScreenStateChange(MainScreenStates.Statistics)
-            HomeEvent.OnStatistic -> onMainScreenStateChange(MainScreenStates.Settings)
+            HomeEvent.OnSettings -> onMainScreenStateChange(MainScreenStates.Settings)
+            HomeEvent.OnStatistic -> onMainScreenStateChange(MainScreenStates.Statistics)
         }
     }
 
