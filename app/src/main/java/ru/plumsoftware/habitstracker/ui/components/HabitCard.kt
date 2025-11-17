@@ -1,29 +1,34 @@
 package ru.plumsoftware.habitstracker.ui.components
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
 import ru.plumsoftware.habitstracker.ui.theme.Dimen
-import ru.plumsoftware.habitstracker.ui.theme.doneHabitColor
 
 @Composable
 fun HabitCard(
@@ -31,20 +36,24 @@ fun HabitCard(
     onClick: (Habit) -> Unit,
     onDone: (Boolean) -> Unit
 ) {
-    var isDone by rememberSaveable { mutableStateOf(habitWithStatus.completed ?: false) }
+    val isDone = habitWithStatus.completed ?: false
 
     Card(
         modifier = Modifier
             .fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (isDone) doneHabitColor else MaterialTheme.colorScheme.surfaceContainer
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        ),
+        border = BorderStroke(
+            width = if (isDone) 1.dp else 0.dp,
+            color = if (isDone) MaterialTheme.colorScheme.primary else Color.Transparent
         ),
         shape = MaterialTheme.shapes.medium
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Dimen.large, vertical = Dimen.large),
+                .padding(horizontal = Dimen.extraLarge, vertical = Dimen.extraLarge),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -84,16 +93,35 @@ fun HabitCard(
             Box(
                 modifier = Modifier
                     .wrapContentSize()
-                    .clip(shape = MaterialTheme.shapes.small)
-            )
-            {
-                Checkbox(
-                    checked = isDone,
-                    onCheckedChange = {
-                        isDone = it
-                        onDone(it)
+            ) {
+                // Кастомный чекбокс с иконкой
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(
+                            color = if (isDone) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = if (isDone) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outline,
+                            shape = RoundedCornerShape(6.dp)
+                        )
+                        .clickable { onDone(!isDone) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isDone) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Выполнено",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
-                )
+                }
             }
         }
     }

@@ -21,7 +21,7 @@ class HabitRepository(
 
     fun getHabitsWithStatus(date: Long): Flow<List<HabitWithStatus>> {
         Log.d("HabitRepository", "Запрос привычек для даты: ${Date(date)}")
-        return habitDao.getAllHabitsWithCompletions(date)
+        return habitDao.getHabitsWithStatus(date) // Используем исправленный метод
             .map { allHabits ->
                 // Фильтруем по периодичности на стороне Kotlin
                 allHabits.filter { habitWithStatus ->
@@ -31,52 +31,31 @@ class HabitRepository(
                     filteredHabits.forEach { habit ->
                         Log.d(
                             "HabitRepository",
-                            " - ${habit.habit.title}, период: ${habit.habit.periodicity}"
+                            " - ${habit.habit.title}, период: ${habit.habit.periodicity}, дата создания: ${Date(habit.habit.creationDate)}"
                         )
                     }
                 }
             }
     }
 
-    private fun isHabitActiveOnDate(habit: Habit, date: Long): Boolean {
-        val creationDateFormatted = Date(habit.creationDate)
-        val targetDateFormatted = Date(date)
+    private fun isHabitActiveOnDate(habit: Habit, targetDate: Long): Boolean {
+        val startOfTargetDay = getStartOfDay(targetDate)
+        val startOfCreationDay = getStartOfDay(habit.creationDate)
 
-        Log.d("HabitRepository", "Проверка привычки '${habit.title}':")
-        Log.d("HabitRepository", "  - Периодичность: ${habit.periodicity}")
-        Log.d("HabitRepository", "  - Дата создания: $creationDateFormatted")
-        Log.d("HabitRepository", "  - Проверяемая дата: $targetDateFormatted")
-
-        // Привычка активна только если дата >= даты создания
-        if (date < getStartOfDay(habit.creationDate)) {
-            Log.d("HabitRepository", "  - ❌ Дата создания позже проверяемой даты")
+        // Привычка не активна до даты создания
+        if (startOfTargetDay < startOfCreationDay) {
+            Log.d("HabitRepository", "Привычка ${habit.title} не активна - дата создания в будущем")
             return false
         }
 
-        val result = when (habit.periodicity) {
-            Periodicity.DAILY -> {
-                Log.d("HabitRepository", "  - ✅ Ежедневная привычка - активна")
-                true
-            }
-            Periodicity.WEEKLY -> {
-                val creationCalendar = Calendar.getInstance().apply {
-                    timeInMillis = habit.creationDate
-                }
-                val targetCalendar = Calendar.getInstance().apply {
-                    timeInMillis = date
-                }
-                val sameDayOfWeek = creationCalendar.get(Calendar.DAY_OF_WEEK) == targetCalendar.get(Calendar.DAY_OF_WEEK)
-                Log.d("HabitRepository", "  - Еженедельная: день недели совпадает = $sameDayOfWeek")
-                sameDayOfWeek
-            }
-            else -> {
-                Log.d("HabitRepository", "  - ⚠️ Неизвестная периодичность")
-                true
-            }
-        }
+        // Проверяем периодичность
+        val daysBetween = (startOfTargetDay - startOfCreationDay) / (24 * 60 * 60 * 1000)
+        val periodicityDays = habit.periodicity.days.toLong()
+        val isActive = daysBetween % periodicityDays == 0L
 
-        Log.d("HabitRepository", "  - Итоговый результат: $result")
-        return result
+        Log.d("HabitRepository", "Привычка ${habit.title}: daysBetween=$daysBetween, periodicityDays=$periodicityDays, isActive=$isActive")
+
+        return isActive
     }
 
     fun getAllHabits(): Flow<List<Habit>> = habitDao.getAllHabits()
@@ -123,25 +102,28 @@ class HabitRepository(
     /**
      * Отметить привычку как выполненную на конкретную дату
      */
-    suspend fun markHabitCompleted(habitId: String, date: Long = getStartOfDay()) {
-        val habit = habitDao.getHabitById(habitId) ?: return
+    suspend fun markHabitCompleted(habitId: String, date: Long) {
+        val startOfDay = getStartOfDay(date)
 
-        val (periodStart, periodEnd) = getPeriodForHabit(habit, date)
+        val existingCompletion = habitCompletionDao.getCompletion(habitId, startOfDay)
 
-        // Проверяем, не выполнена ли уже привычка в этом периоде
-        val existingCompletions =
-            habitCompletionDao.getCompletionForPeriod(habitId, periodStart, periodEnd)
-        val completedInPeriod = existingCompletions.any { it.completed }
-
-        if (!completedInPeriod) {
-            habitCompletionDao.insertCompletion(
-                HabitCompletion(
-                    id = UUID.randomUUID().toString(),
-                    habitId = habitId,
-                    completionDate = date,
-                    completed = true
-                )
+        if (existingCompletion != null) {
+            // Обновляем существующую запись
+            val updatedCompletion = existingCompletion.copy(
+                completed = true,
+                completedCount = existingCompletion.completedCount + 1
             )
+            habitCompletionDao.updateCompletion(updatedCompletion)
+        } else {
+            // Создаем новую запись
+            val completion = HabitCompletion(
+                id = UUID.randomUUID().toString(),
+                habitId = habitId,
+                completionDate = startOfDay,
+                completed = true,
+                completedCount = 1
+            )
+            habitCompletionDao.insertCompletion(completion)
         }
     }
 
@@ -189,20 +171,25 @@ class HabitRepository(
     /**
      * Снять отметку о выполнении привычки на конкретную дату
      */
-    suspend fun unmarkHabitCompleted(habitId: String, date: Long = getStartOfDay()) {
-        val completion = habitCompletionDao.getCompletion(habitId, date)
-        if (completion != null) {
-            habitCompletionDao.updateCompletion(completion.copy(completed = false))
-        } else {
-            habitCompletionDao.insertCompletion(
-                HabitCompletion(
-                    id = UUID.randomUUID().toString(),
-                    habitId = habitId,
-                    completionDate = date,
-                    completed = false
+    suspend fun unmarkHabitCompleted(habitId: String, date: Long) {
+        val startOfDay = getStartOfDay(date)
+
+        val existingCompletion = habitCompletionDao.getCompletion(habitId, startOfDay)
+
+        if (existingCompletion != null) {
+            if (existingCompletion.completedCount > 1) {
+                // Если счетчик больше 1, уменьшаем его
+                val updatedCompletion = existingCompletion.copy(
+                    completedCount = existingCompletion.completedCount - 1,
+                    completed = existingCompletion.completedCount - 1 > 0
                 )
-            )
+                habitCompletionDao.updateCompletion(updatedCompletion)
+            } else {
+                // Если счетчик 1 или меньше, удаляем запись полностью
+                habitCompletionDao.deleteCompletion(existingCompletion.id)
+            }
         }
+        // Если записи нет, ничего не делаем
     }
 
     /**

@@ -12,6 +12,7 @@ import org.koin.dsl.module
 import ru.plumsoftware.habitstracker.data.database.HabitRepository
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
+import ru.plumsoftware.habitstracker.getStartOfDay
 import java.util.Calendar
 import java.util.Date
 
@@ -276,14 +277,14 @@ class HomeViewModel(
             _state.update { it.copy(isLoading = true) }
 
             try {
-                repository.getHabitsWithStatus(date).collect { habitsWithStatus ->
-                    // Сортируем привычки по времени
-                    val sortedHabits = sortHabitsByTime(habitsWithStatus)
+                val startOfDay = getStartOfDay(date)
+                Log.d("HomeViewModel", "Начинаем загрузку привычек для даты: ${Date(startOfDay)}")
 
-                    Log.d("HomeViewModel", "Загружено привычек: ${sortedHabits.size} для даты: ${Date(date)}")
-                    sortedHabits.forEachIndexed { index, habitWithStatus ->
-                        Log.d("HomeViewModel", "Привычка $index: ${habitWithStatus.habit.title}, время: ${habitWithStatus.habit.reminderTimeHour}:${habitWithStatus.habit.reminderTimeMinute}")
-                    }
+                repository.getHabitsWithStatus(startOfDay).collect { habitsWithStatus ->
+                    Log.d("HomeViewModel", "Получено привычек из репозитория: ${habitsWithStatus.size}")
+
+                    val sortedHabits = sortHabitsByTime(habitsWithStatus)
+                    Log.d("HomeViewModel", "После сортировки: ${sortedHabits.size} привычек")
 
                     _state.update {
                         it.copy(

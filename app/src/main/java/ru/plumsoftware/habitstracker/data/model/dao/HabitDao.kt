@@ -33,8 +33,7 @@ interface HabitDao {
     fun getHabitsByPeriodicity(periodicity: Int): Flow<List<Habit>>
 
     /**
-     * Получить привычки со статусом на дату, которые активны на эту дату
-     * (дата создания привычки <= выбранной даты)
+     * Получить привычки со статусом на дату
      */
     @Transaction
     @Query("""

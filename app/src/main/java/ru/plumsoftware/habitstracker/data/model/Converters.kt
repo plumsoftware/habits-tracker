@@ -4,8 +4,19 @@ import androidx.room.TypeConverter
 
 class Converters {
     @TypeConverter
-    fun fromPeriodicity(periodicity: Periodicity): String = periodicity.name
+    fun fromPeriodicity(periodicity: Periodicity): Int {
+        return when (periodicity) {
+            Periodicity.DAILY -> 0
+            Periodicity.WEEKLY -> 1
+        }
+    }
 
     @TypeConverter
-    fun toPeriodicity(value: String): Periodicity = Periodicity.valueOf(value)
+    fun toPeriodicity(value: Int): Periodicity {
+        return when (value) {
+            0 -> Periodicity.DAILY
+            1 -> Periodicity.WEEKLY
+            else -> Periodicity.DAILY
+        }
+    }
 }

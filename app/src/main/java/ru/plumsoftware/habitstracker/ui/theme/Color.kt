@@ -296,5 +296,5 @@ val onGoodColorDarkHighContrast = Color(0xFF000000)
 val goodColorContainerDarkHighContrast = Color(0xFF9DCF96)
 val onGoodColorContainerDarkHighContrast = Color(0xFF000F01)
 
-val doneHabitColor = Color(0xFFE2E2E2)
+val doneHabitColor = Color(0xFFEEEEEE)
 
