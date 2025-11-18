@@ -29,7 +29,7 @@ class HomeViewModel(
 
     fun onEvent(event: HomeEvent) {
         when (event) {
-            is HomeEvent.LoadHabits -> loadHabits()
+            is HomeEvent.LoadHabits -> loadHabits(isFirstTime = false)
             is HomeEvent.AddHabit -> addHabit(event.habit)
             is HomeEvent.UpdateHabit -> updateHabit(event.habit)
             is HomeEvent.DeleteHabit -> deleteHabit(event.habit)
@@ -42,6 +42,50 @@ class HomeViewModel(
             HomeEvent.OnNotifications -> onMainScreenStateChange(MainScreenStates.Notifications)
             HomeEvent.OnSettings -> onMainScreenStateChange(MainScreenStates.Settings)
             HomeEvent.OnStatistic -> onMainScreenStateChange(MainScreenStates.Statistics)
+
+            is HomeEvent.OpenEditHabit -> openEditHabit(event.habit)
+            HomeEvent.CloseEditBottomSheet -> closeEditBottomSheet()
+            is HomeEvent.DeleteHabitById -> deleteHabitById(event.habitId)
+        }
+    }
+
+    private fun openEditHabit(habit: Habit) {
+        _state.update {
+            it.copy(
+                isEditBottomSheetOpen = true,
+                editingHabit = habit
+            )
+        }
+    }
+
+    private fun closeEditBottomSheet() {
+        _state.update {
+            it.copy(
+                isEditBottomSheetOpen = false,
+                editingHabit = null
+            )
+        }
+    }
+
+    private fun deleteHabitById(habitId: String) {
+        Log.d("HomeViewModel", "Удаляем привычку по ID: $habitId")
+        viewModelScope.launch {
+            _state.update { it.copy(isLoading = true) }
+
+            try {
+                repository.deleteHabitById(habitId)
+                Log.d("HomeViewModel", "Привычка с ID $habitId успешно удалена")
+                closeEditBottomSheet()
+                loadHabitsForDate(state.value.selectedDate)
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "Ошибка удаления привычки: ${e.message}", e)
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "Ошибка удаления привычки: ${e.message}"
+                    )
+                }
+            }
         }
     }
 
@@ -337,7 +381,7 @@ class HomeViewModel(
     }
 
     // Также обновите loadHabits() аналогичным образом
-    private fun loadHabits() {
+    private fun loadHabits(isFirstTime: Boolean = true) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
 
@@ -355,8 +399,16 @@ class HomeViewModel(
                         _state.update {
                             it.copy(
                                 habitsWithStatus = sortedHabits,
-                                isLoading = false
+                                isLoading = false,
                             )
+                        }
+
+                        if (isFirstTime) {
+                            _state.update {
+                                it.copy(
+                                    allHabitsSize = sortedHabits.size
+                                )
+                            }
                         }
                     }
             } catch (e: Exception) {

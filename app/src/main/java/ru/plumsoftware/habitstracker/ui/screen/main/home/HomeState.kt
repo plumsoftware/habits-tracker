@@ -12,5 +12,8 @@ data class HomeState(
     val selectedDay: Int = 0,
     val selectedMonth: Int = 0,
     val errorMessage: String? = null,
-    val mainScreenState: MainScreenStates = MainScreenStates.Home
+    val mainScreenState: MainScreenStates = MainScreenStates.Home,
+    val allHabitsSize: Int = 0,
+    val isEditBottomSheetOpen: Boolean = false,
+    val editingHabit: Habit? = null
 )

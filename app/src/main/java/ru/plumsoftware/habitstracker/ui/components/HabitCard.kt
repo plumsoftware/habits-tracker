@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -37,6 +38,7 @@ fun HabitCard(
     onDone: (Boolean) -> Unit
 ) {
     val isDone = habitWithStatus.completed ?: false
+    val hasReminder = habitWithStatus.habit.reminderInterval > 0
 
     Card(
         modifier = Modifier
@@ -48,7 +50,10 @@ fun HabitCard(
             width = if (isDone) 1.dp else 0.dp,
             color = if (isDone) MaterialTheme.colorScheme.primary else Color.Transparent
         ),
-        shape = MaterialTheme.shapes.medium
+        shape = MaterialTheme.shapes.medium,
+        onClick = {
+            onClick(habitWithStatus.habit)
+        }
     ) {
         Row(
             modifier = Modifier
@@ -65,11 +70,31 @@ fun HabitCard(
                     alignment = Alignment.CenterVertically
                 )
             ) {
-                TimeCard(
-                    time = "${habitWithStatus.habit.reminderTimeHour}:${if (habitWithStatus.habit.reminderTimeMinute == 0) "00" else habitWithStatus.habit.reminderTimeMinute}",
-                    isClickable = false,
-                    onSelectedTime = { _, _ -> }
-                )
+                // Показываем иконку напоминания, если оно включено
+                if (hasReminder) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Dimen.small)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Напоминание включено",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        TimeCard(
+                            time = "${habitWithStatus.habit.reminderTimeHour}:${if (habitWithStatus.habit.reminderTimeMinute == 0) "00" else habitWithStatus.habit.reminderTimeMinute}",
+                            isClickable = false,
+                            onSelectedTime = { _, _ -> }
+                        )
+                    }
+                } else {
+                    TimeCard(
+                        time = "${habitWithStatus.habit.reminderTimeHour}:${if (habitWithStatus.habit.reminderTimeMinute == 0) "00" else habitWithStatus.habit.reminderTimeMinute}",
+                        isClickable = false,
+                        onSelectedTime = { _, _ -> }
+                    )
+                }
 
                 Column(
                     modifier = Modifier.wrapContentSize(),
@@ -87,6 +112,14 @@ fun HabitCard(
                         text = habitWithStatus.habit.body.trim(),
                         style = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.outline)
                     )
+                    // Показываем текст о напоминании, если оно включено
+                    if (hasReminder) {
+                        Text(
+                            text = "Напоминание за ${habitWithStatus.habit.reminderInterval} мин.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
                 }
             }
 

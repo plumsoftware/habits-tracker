@@ -24,12 +24,35 @@ import ru.plumsoftware.habitstracker.ui.theme.Dimen
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimeCard(
-    time: String = "12:00",
+    initialHour: Int? = null,
+    initialMinute: Int? = null,
+    time: String? = null,
     isClickable: Boolean,
     onSelectedTime: (Int, Int) -> Unit
 ) {
     var showTimePicker by remember { mutableStateOf(false) }
-    var selectedTime by remember { mutableStateOf(time) }
+
+    // Инициализируем выбранное время
+    val (selectedTime, setSelectedTime) = remember(initialHour, initialMinute, time) {
+        val initialTime = if (time != null) {
+            time
+        } else if (initialHour != null && initialMinute != null) {
+            "${initialHour}:${initialMinute.toString().padStart(2, '0')}"
+        } else {
+            "12:00"
+        }
+        mutableStateOf(initialTime)
+    }
+
+    // Парсим текущее выбранное время для TimePicker
+    val (currentHour, currentMinute) = remember(selectedTime) {
+        val parts = selectedTime.split(":")
+        if (parts.size == 2) {
+            parts[0].toIntOrNull() to parts[1].toIntOrNull()
+        } else {
+            null to null
+        }
+    }
 
     Card(
         modifier = Modifier
@@ -40,8 +63,9 @@ fun TimeCard(
         ),
         elevation = CardDefaults.elevatedCardElevation(0.dp, 0.dp, 0.dp),
         onClick = {
-            if (isClickable)
+            if (isClickable) {
                 showTimePicker = true
+            }
         }
     ) {
         Text(
@@ -53,8 +77,8 @@ fun TimeCard(
 
     if (showTimePicker) {
         val timeState = rememberTimePickerState(
-            initialHour = 12,
-            initialMinute = 0,
+            initialHour = currentHour ?: 12,
+            initialMinute = currentMinute ?: 0,
             is24Hour = true
         )
 
@@ -74,11 +98,10 @@ fun TimeCard(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        selectedTime =
-                            "${timeState.hour}:${timeState.minute.toString().padStart(2, '0')}"
-                        showTimePicker = false
-
+                        val newTime = "${timeState.hour}:${timeState.minute.toString().padStart(2, '0')}"
+                        setSelectedTime(newTime)
                         onSelectedTime(timeState.hour, timeState.minute)
+                        showTimePicker = false
                     }
                 ) {
                     Text(

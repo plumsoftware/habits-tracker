@@ -17,4 +17,8 @@ sealed interface HomeEvent {
     data object OnStatistic: HomeEvent
     data object OnSettings: HomeEvent
     data object OnNotifications: HomeEvent
+
+    data class OpenEditHabit(val habit: Habit) : HomeEvent
+    object CloseEditBottomSheet : HomeEvent
+    data class DeleteHabitById(val habitId: String) : HomeEvent
 }

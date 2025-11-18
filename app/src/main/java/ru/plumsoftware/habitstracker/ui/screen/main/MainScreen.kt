@@ -79,6 +79,8 @@ fun HomeScreen(
     //Автопрокрутка до ближайшей привычки
     val listState = rememberLazyListState()
 
+    val isEditMode = state.editingHabit != null
+
     // Находим индекс ближайшей привычки
     val nearestHabitIndex = remember(state.habitsWithStatus) {
         findNearestHabitIndex(state.habitsWithStatus)
@@ -93,6 +95,13 @@ fun HomeScreen(
                 index = nearestHabitIndex,
                 scrollOffset = 0
             )
+        }
+    }
+
+    LaunchedEffect(showBottomSheet) {
+        if (!showBottomSheet && state.editingHabit != null) {
+            // Если закрыли BottomSheet в режиме редактирования, сбрасываем состояние
+            viewModel.onEvent(HomeEvent.CloseEditBottomSheet)
         }
     }
 
@@ -199,7 +208,7 @@ fun HomeScreen(
                             )
 
                             Text(
-                                text = "Привычки на сегодня",
+                                text = "Привычки на сегодня: ${state.allHabitsSize}",
                                 style = MaterialTheme.typography.titleMedium
                             )
                         }
@@ -255,8 +264,9 @@ fun HomeScreen(
                         itemsIndexed(state.habitsWithStatus) { index, item ->
                             HabitCard(
                                 habitWithStatus = item,
-                                onClick = {
-
+                                onClick = { habit ->
+                                    viewModel.onEvent(HomeEvent.OpenEditHabit(habit))
+                                    showBottomSheet = true
                                 },
                                 onDone = { isDone ->
                                     if (isDone) {
@@ -298,7 +308,20 @@ fun HomeScreen(
                     onSaveHabit = { habit ->
                         viewModel.onEvent(HomeEvent.AddHabit(habit = habit))
                         showBottomSheet = false
-                    }
+                    },
+                    onUpdateHabit = { habit ->
+                        viewModel.onEvent(HomeEvent.UpdateHabit(habit))
+                        showBottomSheet = false
+                    },
+                    onDeleteHabit = if (isEditMode) {
+                        {
+                            state.editingHabit?.let { habit ->
+                                viewModel.onEvent(HomeEvent.DeleteHabitById(habit.id))
+                            }
+                            showBottomSheet = false
+                        }
+                    } else null,
+                    editingHabit = state.editingHabit
                 )
             }
         }

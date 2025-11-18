@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentSize
@@ -26,6 +26,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,7 +45,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.Periodicity
@@ -54,21 +54,43 @@ import java.util.UUID
 
 @Composable
 fun AddBottomSheet(
-    onSaveHabit: (Habit) -> Unit
+    onSaveHabit: (Habit) -> Unit,
+    onUpdateHabit: (Habit) -> Unit = {}, // Новый параметр для обновления
+    onDeleteHabit: (() -> Unit)? = null, // Новый параметр для удаления
+    editingHabit: Habit? = null // Привычка для редактирования (null = создание)
 ) {
-    var title by remember { mutableStateOf("") }
+    val isEditMode = editingHabit != null
+
+    // Инициализируем состояния из editingHabit или пустыми значениями
+    var title by remember { mutableStateOf(editingHabit?.title ?: "") }
     val titleFocusRequester = remember { FocusRequester() }
     var isTitleFocused by remember { mutableStateOf(false) }
 
-    var desc by remember { mutableStateOf("") }
+    var desc by remember { mutableStateOf(editingHabit?.body ?: "") }
     val descFocusRequester = remember { FocusRequester() }
     var isDescFocused by remember { mutableStateOf(false) }
 
     var showDialog by remember { mutableStateOf(false) }
-    var selectedFrequency by remember { mutableStateOf("Каждый день") }
+    var selectedFrequency by remember {
+        mutableStateOf(
+            when (editingHabit?.periodicity) {
+                Periodicity.WEEKLY -> "Каждую неделю"
+                else -> "Каждый день"
+            }
+        )
+    }
 
-    var selectedTime by remember { mutableStateOf(0 to 0) } // (часы, минуты)
-    var selectedInterval by remember { mutableIntStateOf(5) } // минуты
+    var selectedTime by remember {
+        mutableStateOf(
+            (editingHabit?.reminderTimeHour to editingHabit?.reminderTimeMinute)
+        )
+    }
+    var selectedInterval by remember {
+        mutableIntStateOf(editingHabit?.reminderInterval ?: 5)
+    }
+
+//    var selectedTime by remember { mutableStateOf(0 to 0) } // (часы, минуты)
+//    var selectedInterval by remember { mutableIntStateOf(5) } // минуты
 
     if (showDialog) {
         AlertDialog(
@@ -125,6 +147,14 @@ fun AddBottomSheet(
         verticalArrangement = Arrangement.spacedBy(space = Dimen.large, alignment = Alignment.Top),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Заголовок в зависимости от режима
+        Text(
+            text = if (isEditMode) "Редактировать привычку" else "Новая привычка",
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // Поля формы остаются без изменений
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(
@@ -144,7 +174,6 @@ fun AddBottomSheet(
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                // Placeholder
                 if (title.isEmpty()) {
                     Text(
                         text = "Придумайте название привычки",
@@ -224,7 +253,6 @@ fun AddBottomSheet(
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                // Placeholder
                 if (desc.isEmpty()) {
                     Text(
                         text = "Напишите описание привычки",
@@ -274,7 +302,7 @@ fun AddBottomSheet(
                         Icon(
                             imageVector = Icons.Rounded.Clear,
                             contentDescription = "Clear",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant, // Серый цвет иконки
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier
                                 .clip(CircleShape)
                                 .clickable(role = Role.Button) { desc = "" }
@@ -329,6 +357,7 @@ fun AddBottomSheet(
             }
         }
 
+        // В AddBottomSheet, в Row с TimeCard и IntervalCard:
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -351,6 +380,8 @@ fun AddBottomSheet(
                 )
 
                 TimeCard(
+                    initialHour = editingHabit?.reminderTimeHour,
+                    initialMinute = editingHabit?.reminderTimeMinute,
                     isClickable = true,
                     onSelectedTime = { hour, minute ->
                         selectedTime = hour to minute
@@ -372,6 +403,7 @@ fun AddBottomSheet(
                 )
 
                 IntervalCard(
+                    initialInterval = editingHabit?.reminderInterval,
                     onSelectedTime = { interval ->
                         selectedInterval = interval
                     }
@@ -379,6 +411,7 @@ fun AddBottomSheet(
             }
         }
 
+        // Кнопка сохранения/обновления
         Button(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = Dimen.medium, vertical = Dimen.mediumPlus),
@@ -387,29 +420,72 @@ fun AddBottomSheet(
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ),
             onClick = {
-                val habit = Habit(
-                    id = UUID.randomUUID().toString(),
-                    title = title,
-                    body = desc,
-                    periodicity = when (selectedFrequency) {
-                        "Каждый день" -> Periodicity.DAILY
-                        "Каждую неделю" -> Periodicity.WEEKLY
-                        else -> Periodicity.DAILY
-                    },
-                    creationDate = getStartOfDay(System.currentTimeMillis()), // Начало текущего дня
-                    targetCount = 1,
-                    reminderTimeHour = selectedTime.first,
-                    reminderTimeMinute = selectedTime.second,
-                    reminderInterval = selectedInterval
-                )
+                val habit = if (isEditMode) {
+                    // Режим редактирования - обновляем существующую привычку
+                    editingHabit.copy(
+                        title = title,
+                        body = desc,
+                        periodicity = when (selectedFrequency) {
+                            "Каждый день" -> Periodicity.DAILY
+                            "Каждую неделю" -> Periodicity.WEEKLY
+                            else -> Periodicity.DAILY
+                        },
+                        reminderTimeHour = selectedTime.first ?: 0,
+                        reminderTimeMinute = selectedTime.second ?: 0,
+                        reminderInterval = selectedInterval
+                    )
+                } else {
+                    // Режим создания - создаем новую привычку
+                    Habit(
+                        id = UUID.randomUUID().toString(),
+                        title = title,
+                        body = desc,
+                        periodicity = when (selectedFrequency) {
+                            "Каждый день" -> Periodicity.DAILY
+                            "Каждую неделю" -> Periodicity.WEEKLY
+                            else -> Periodicity.DAILY
+                        },
+                        creationDate = getStartOfDay(System.currentTimeMillis()),
+                        targetCount = 1,
+                        reminderTimeHour = selectedTime.first ?: 0,
+                        reminderTimeMinute = selectedTime.second ?: 0,
+                        reminderInterval = selectedInterval
+                    )
+                }
 
-                onSaveHabit(habit)
+                if (isEditMode) {
+                    onUpdateHabit(habit)
+                } else {
+                    onSaveHabit(habit)
+                }
             }
         ) {
             Text(
-                text = "Сохранить",
+                text = if (isEditMode) "Сохранить изменения" else "Сохранить",
                 style = MaterialTheme.typography.bodyMedium
             )
+        }
+
+        // Кнопка удаления (только в режиме редактирования)
+        if (isEditMode && onDeleteHabit != null) {
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(
+                    horizontal = Dimen.medium,
+                    vertical = Dimen.mediumPlus
+                ),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.error
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                onClick = onDeleteHabit
+            ) {
+                Text(
+                    text = "Удалить привычку",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         }
     }
 }

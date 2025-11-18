@@ -3,6 +3,7 @@ package ru.plumsoftware.habitstracker.data.database
 import android.util.Log
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitCompletion
@@ -10,13 +11,15 @@ import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
 import ru.plumsoftware.habitstracker.data.model.Periodicity
 import ru.plumsoftware.habitstracker.data.model.dao.HabitCompletionDao
 import ru.plumsoftware.habitstracker.data.model.dao.HabitDao
+import ru.plumsoftware.habitstracker.data.notification.HabitNotificationManager
 import java.util.Calendar
 import java.util.Date
 import java.util.UUID
 
 class HabitRepository(
     private val habitDao: HabitDao,
-    private val habitCompletionDao: HabitCompletionDao
+    private val habitCompletionDao: HabitCompletionDao,
+    private val habitNotificationManager: HabitNotificationManager
 ) {
 
     fun getHabitsWithStatus(date: Long): Flow<List<HabitWithStatus>> {
@@ -31,7 +34,11 @@ class HabitRepository(
                     filteredHabits.forEach { habit ->
                         Log.d(
                             "HabitRepository",
-                            " - ${habit.habit.title}, период: ${habit.habit.periodicity}, дата создания: ${Date(habit.habit.creationDate)}"
+                            " - ${habit.habit.title}, период: ${habit.habit.periodicity}, дата создания: ${
+                                Date(
+                                    habit.habit.creationDate
+                                )
+                            }"
                         )
                     }
                 }
@@ -53,7 +60,10 @@ class HabitRepository(
         val periodicityDays = habit.periodicity.days.toLong()
         val isActive = daysBetween % periodicityDays == 0L
 
-        Log.d("HabitRepository", "Привычка ${habit.title}: daysBetween=$daysBetween, periodicityDays=$periodicityDays, isActive=$isActive")
+        Log.d(
+            "HabitRepository",
+            "Привычка ${habit.title}: daysBetween=$daysBetween, periodicityDays=$periodicityDays, isActive=$isActive"
+        )
 
         return isActive
     }
@@ -62,13 +72,33 @@ class HabitRepository(
 
     suspend fun getHabitById(id: String): Habit? = habitDao.getHabitById(id)
 
-    suspend fun insertHabit(habit: Habit) = habitDao.insertHabit(habit)
+    suspend fun insertHabit(habit: Habit) {
+        habitDao.insertHabit(habit)
+        // Планируем уведомления для новой привычки
+        habitNotificationManager.scheduleHabitNotification(habit)
+    }
 
-    suspend fun updateHabit(habit: Habit) = habitDao.updateHabit(habit)
+    suspend fun updateHabit(habit: Habit) {
+        habitDao.updateHabit(habit)
 
-    suspend fun deleteHabit(habit: Habit) = habitDao.deleteHabit(habit)
+        // Перепланируем уведомления для обновленной привычки
+        habitNotificationManager.cancelHabitNotification(habit.id)
+        habitNotificationManager.scheduleHabitNotification(habit)
+    }
 
-    suspend fun deleteHabitById(id: String) = habitDao.deleteHabitById(id)
+    suspend fun deleteHabit(habit: Habit) {
+        habitDao.deleteHabit(habit)
+
+        // Отменяем уведомления для удаленной привычки
+        habitNotificationManager.cancelHabitNotification(habit.id)
+    }
+
+    suspend fun deleteHabitById(id: String) {
+        habitDao.deleteHabitById(id)
+
+        // Отменяем уведомления для удаленной привычки
+        habitNotificationManager.cancelHabitNotification(id)
+    }
 
     fun searchHabits(query: String): Flow<List<Habit>> = habitDao.searchHabits("%$query%")
 
@@ -235,8 +265,13 @@ class HabitRepository(
 
     companion object {
         val repositoryModule = module {
+            single<HabitNotificationManager> {
+                HabitNotificationManager(context = androidContext())
+            }
+
             single<HabitRepository> {
                 HabitRepository(
+                    get(),
                     get(),
                     get()
                 )
