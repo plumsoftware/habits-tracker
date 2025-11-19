@@ -344,7 +344,7 @@ class HomeViewModel(
         ))
     }
 
-    private fun loadHabitsForDate(date: Long) {
+    private fun loadHabitsForDate(date: Long, isFirstTime: Boolean = true) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
 
@@ -361,11 +361,21 @@ class HomeViewModel(
                     val sortedHabits = sortHabitsByTime(habitsWithStatus)
                     Log.d("HomeViewModel", "После сортировки: ${sortedHabits.size} привычек")
 
-                    _state.update {
-                        it.copy(
-                            habitsWithStatus = sortedHabits,
-                            isLoading = false
-                        )
+                    if (isFirstTime) {
+                        _state.update {
+                            it.copy(
+                                habitsWithStatus = sortedHabits,
+                                allHabitsSize = sortedHabits.size,
+                                isLoading = false
+                            )
+                        }
+                    } else {
+                        _state.update {
+                            it.copy(
+                                habitsWithStatus = sortedHabits,
+                                isLoading = false
+                            )
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -411,9 +421,7 @@ class HomeViewModel(
                             }
                         }
                     }
-            } catch (e: Exception) {
-                // ... обработка ошибок ...
-            }
+            } catch (e: Exception) { }
         }
     }
 
