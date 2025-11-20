@@ -410,21 +410,29 @@ class HomeViewModel(
             val endOfMonth = getEndOfMonth(calendar)
 
             var totalCompletions = 0
+            var habitsWithCompletions = 0
+
             for (habit in allHabits) {
                 val completions = repository.habitCompletionDao.getCompletionsInPeriod(habit.id, startOfMonth, endOfMonth)
-                totalCompletions += completions.count { it.completed }
+                val completedCount = completions.count { it.completed }
+                totalCompletions += completedCount
+                if (completedCount > 0) {
+                    habitsWithCompletions++
+                }
             }
 
-            // completionRate = общее количество выполненных привычек / (общее количество привычек * дней в месяце)
-            val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-            val maxPossibleCompletions = totalHabits * daysInMonth
-            val completionRate = if (maxPossibleCompletions > 0) {
-                totalCompletions.toFloat() / maxPossibleCompletions
+            // Вычисляем невыполненные привычки
+            val uncompletedHabits = totalHabits - habitsWithCompletions
+
+            // completionRate = количество привычек, которые были выполнены хоть раз / общее количество привычек
+            val completionRate = if (totalHabits > 0) {
+                habitsWithCompletions.toFloat() / totalHabits
             } else 0f
 
             MonthlyStats(
                 totalHabits = totalHabits,
-                completedHabits = totalCompletions,
+                completedHabits = habitsWithCompletions, // Привычки, которые были выполнены хоть раз
+                uncompletedHabits = uncompletedHabits,   // Привычки, которые не были выполнены ни разу
                 completionRate = completionRate
             )
         } catch (e: Exception) {
@@ -436,11 +444,13 @@ class HomeViewModel(
     private fun calculateDailyStats(habitsWithStatus: List<HabitWithStatus>): DailyStats {
         val completedHabits = habitsWithStatus.count { it.completed == true }
         val totalHabits = habitsWithStatus.size
+        val uncompletedHabits = totalHabits - completedHabits
         val completionRate = if (totalHabits > 0) completedHabits.toFloat() / totalHabits else 0f
 
         return DailyStats(
             totalHabits = totalHabits,
             completedHabits = completedHabits,
+            uncompletedHabits = uncompletedHabits,
             completionRate = completionRate
         )
     }
