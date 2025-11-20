@@ -2,6 +2,7 @@ package ru.plumsoftware.habitstracker.data.database
 
 import android.util.Log
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
@@ -18,7 +19,7 @@ import java.util.UUID
 
 class HabitRepository(
     private val habitDao: HabitDao,
-    private val habitCompletionDao: HabitCompletionDao,
+    val habitCompletionDao: HabitCompletionDao,
     private val habitNotificationManager: HabitNotificationManager
 ) {
 
@@ -261,6 +262,18 @@ class HabitRepository(
             set(Calendar.MILLISECOND, 0)
         }
         return calendar.timeInMillis
+    }
+
+    suspend fun getMonthlyCompletions(startDate: Long, endDate: Long): Map<String, Int> {
+        val allHabits = habitDao.getAllHabits().first()
+        val completionsMap = mutableMapOf<String, Int>()
+
+        for (habit in allHabits) {
+            val completions = habitCompletionDao.getCompletionsInPeriod(habit.id, startDate, endDate)
+            completionsMap[habit.id] = completions.count { it.completed }
+        }
+
+        return completionsMap
     }
 
     companion object {

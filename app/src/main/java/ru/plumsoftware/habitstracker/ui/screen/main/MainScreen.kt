@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -43,12 +44,17 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
 import ru.plumsoftware.habitstracker.R
+import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
 import ru.plumsoftware.habitstracker.ui.components.AddBottomSheet
 import ru.plumsoftware.habitstracker.ui.components.BottomBar
 import ru.plumsoftware.habitstracker.ui.components.CalendarView
+import ru.plumsoftware.habitstracker.ui.components.DailyStatsCard
 import ru.plumsoftware.habitstracker.ui.components.HabitCard
+import ru.plumsoftware.habitstracker.ui.components.MonthlyStatsCard
+import ru.plumsoftware.habitstracker.ui.components.StatisticsSection
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeEvent
+import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeState
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeViewModel
 import ru.plumsoftware.habitstracker.ui.screen.main.notifications.NotificationScreen
 import ru.plumsoftware.habitstracker.ui.screen.main.settings.SettingsScreen
@@ -294,7 +300,108 @@ fun HomeScreen(
             }
 
             MainScreenStates.Statistics -> {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .padding(horizontal = Dimen.medium)
+                        .padding(top = Dimen.large),
+                    verticalArrangement = Arrangement.spacedBy(Dimen.medium),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Заголовок и кнопка календаря
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(
+                                modifier = Modifier.wrapContentSize(),
+                                verticalArrangement = Arrangement.spacedBy(
+                                    space = Dimen.medium,
+                                    alignment = Alignment.Top
+                                ),
+                                horizontalAlignment = Alignment.Start
+                            ) {
+                                Text(
+                                    text = getMonthTitle(state.selectedDate),
+                                    style = MaterialTheme.typography.titleLarge
+                                )
 
+                                Text(
+                                    text = "Привычки на сегодня: ${state.allHabitsSize}",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
+
+                            Card(
+                                modifier = Modifier.size(44.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                                ),
+                                elevation = CardDefaults.elevatedCardElevation(0.dp, 0.dp, 0.dp),
+                                shape = CircleShape,
+                                onClick = {
+                                    showDatePicker = true
+                                }
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    Icon(
+                                        modifier = Modifier.align(Alignment.Center),
+                                        painter = painterResource(R.drawable.calendar_filled),
+                                        contentDescription = "Выбрать дату"
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Spacer
+                    item {
+                        Spacer(modifier = Modifier.height(Dimen.medium))
+                    }
+
+                    // CalendarView
+                    item {
+                        CalendarView(
+                            selectedDate = state.selectedDate,
+                            selectedDay = state.selectedDay,
+                            onDaySelected = { day ->
+                                viewModel.onEvent(HomeEvent.SelectDay(day))
+                            }
+                        )
+                    }
+
+                    // Spacer
+                    item {
+                        Spacer(modifier = Modifier.height(Dimen.large))
+                    }
+
+                    // Статистика - месячная
+                    item {
+                        MonthlyStatsCard(
+                            monthlyStats = state.monthlyStats,
+                            selectedMonth = state.selectedMonth,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    // Spacer
+                    item {
+                        Spacer(modifier = Modifier.height(Dimen.large))
+                    }
+
+                    // Статистика - дневная
+                    item {
+                        DailyStatsCard(
+                            dailyStats = state.dailyStats,
+                            selectedDate = state.selectedDate,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
             }
         }
 
@@ -335,6 +442,39 @@ fun getMonthTitle(selectedDate: Long): String {
     }
     val monthFormat = SimpleDateFormat("LLLL yyyy", Locale.getDefault())
     return monthFormat.format(cal.time).replaceFirstChar { it.uppercase() }
+}
+
+@Composable
+fun HabitsAndStatisticsContent(
+    state: HomeState,
+    listState: LazyListState,
+    onToggleCompletion: (String) -> Unit,
+    onEditHabit: (Habit) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        state = listState,
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Dimen.medium),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Заголовок привычек
+        item {
+            Text(
+                text = "Привычки на сегодня",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = Dimen.small)
+            )
+        }
+
+        // Статистика
+        item {
+            StatisticsSection(state = state)
+        }
+    }
 }
 
 // Функция для поиска индекса ближайшей привычки

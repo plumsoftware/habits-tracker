@@ -32,12 +32,14 @@ fun TimeCard(
 ) {
     var showTimePicker by remember { mutableStateOf(false) }
 
-    // Инициализируем выбранное время
+    // Инициализируем выбранное время с правильным форматированием
     val (selectedTime, setSelectedTime) = remember(initialHour, initialMinute, time) {
         val initialTime = if (time != null) {
-            time
+            // Если время пришло в формате "6:5", форматируем его правильно
+            formatTimeString(time)
         } else if (initialHour != null && initialMinute != null) {
-            "${initialHour}:${initialMinute.toString().padStart(2, '0')}"
+            // Форматируем с ведущими нулями
+            "${initialHour.toString().padStart(2, '0')}:${initialMinute.toString().padStart(2, '0')}"
         } else {
             "12:00"
         }
@@ -98,7 +100,8 @@ fun TimeCard(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        val newTime = "${timeState.hour}:${timeState.minute.toString().padStart(2, '0')}"
+                        // Форматируем время с ведущими нулями
+                        val newTime = "${timeState.hour.toString().padStart(2, '0')}:${timeState.minute.toString().padStart(2, '0')}"
                         setSelectedTime(newTime)
                         onSelectedTime(timeState.hour, timeState.minute)
                         showTimePicker = false
@@ -119,5 +122,22 @@ fun TimeCard(
                 }
             }
         )
+    }
+}
+
+// Вспомогательная функция для форматирования времени
+private fun formatTimeString(timeString: String): String {
+    return try {
+        val parts = timeString.split(":")
+        if (parts.size == 2) {
+            val hour = parts[0].toIntOrNull() ?: 0
+            val minute = parts[1].toIntOrNull() ?: 0
+            "${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}"
+        } else {
+            // Если формат неправильный, возвращаем время по умолчанию
+            "12:00"
+        }
+    } catch (e: Exception) {
+        "12:00"
     }
 }

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.core.module.dsl.viewModel
@@ -361,19 +362,27 @@ class HomeViewModel(
                     val sortedHabits = sortHabitsByTime(habitsWithStatus)
                     Log.d("HomeViewModel", "После сортировки: ${sortedHabits.size} привычек")
 
+                    // Загружаем статистику
+                    val dailyStats = calculateDailyStats(sortedHabits)
+                    val monthlyStats = loadMonthlyStats(date)
+
                     if (isFirstTime) {
                         _state.update {
                             it.copy(
                                 habitsWithStatus = sortedHabits,
                                 allHabitsSize = sortedHabits.size,
-                                isLoading = false
+                                isLoading = false,
+                                dailyStats = dailyStats,
+                                monthlyStats = monthlyStats
                             )
                         }
                     } else {
                         _state.update {
                             it.copy(
                                 habitsWithStatus = sortedHabits,
-                                isLoading = false
+                                isLoading = false,
+                                dailyStats = dailyStats,
+                                monthlyStats = monthlyStats
                             )
                         }
                     }
@@ -388,6 +397,102 @@ class HomeViewModel(
                 }
             }
         }
+    }
+
+    private suspend fun loadMonthlyStats(date: Long): MonthlyStats {
+        return try {
+            val allHabits = repository.getAllHabits().first()
+            val totalHabits = allHabits.size
+
+            // Считаем общее количество выполненных привычек за месяц
+            val calendar = Calendar.getInstance().apply { timeInMillis = date }
+            val startOfMonth = getStartOfMonth(calendar)
+            val endOfMonth = getEndOfMonth(calendar)
+
+            var totalCompletions = 0
+            for (habit in allHabits) {
+                val completions = repository.habitCompletionDao.getCompletionsInPeriod(habit.id, startOfMonth, endOfMonth)
+                totalCompletions += completions.count { it.completed }
+            }
+
+            // completionRate = общее количество выполненных привычек / (общее количество привычек * дней в месяце)
+            val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+            val maxPossibleCompletions = totalHabits * daysInMonth
+            val completionRate = if (maxPossibleCompletions > 0) {
+                totalCompletions.toFloat() / maxPossibleCompletions
+            } else 0f
+
+            MonthlyStats(
+                totalHabits = totalHabits,
+                completedHabits = totalCompletions,
+                completionRate = completionRate
+            )
+        } catch (e: Exception) {
+            Log.e("HomeViewModel", "Ошибка загрузки месячной статистики: ${e.message}", e)
+            MonthlyStats()
+        }
+    }
+
+    private fun calculateDailyStats(habitsWithStatus: List<HabitWithStatus>): DailyStats {
+        val completedHabits = habitsWithStatus.count { it.completed == true }
+        val totalHabits = habitsWithStatus.size
+        val completionRate = if (totalHabits > 0) completedHabits.toFloat() / totalHabits else 0f
+
+        return DailyStats(
+            totalHabits = totalHabits,
+            completedHabits = completedHabits,
+            completionRate = completionRate
+        )
+    }
+
+    private suspend fun calculateDailyCompletions(
+        monthlyCompletions: Map<String, Int>,
+        calendar: Calendar
+    ): Map<Int, Int> {
+        val dailyCompletions = mutableMapOf<Int, Int>()
+        val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+
+        // Инициализируем все дни месяца нулями
+        for (day in 1..daysInMonth) {
+            dailyCompletions[day] = 0
+        }
+
+        // Для простоты считаем общее количество выполненных привычек по дням
+        // В реальном приложении нужно получать данные по каждому дню из базы
+        monthlyCompletions.forEach { (habitId, completions) ->
+            // Здесь нужно получить распределение по дням для каждой привычки
+            // Для демонстрации равномерно распределяем выполнения
+            val completionsPerDay = completions / daysInMonth
+            for (day in 1..daysInMonth) {
+                dailyCompletions[day] = dailyCompletions[day]!! + completionsPerDay
+            }
+        }
+
+        return dailyCompletions
+    }
+
+    private fun getStartOfMonth(calendar: Calendar): Long {
+        val cal = calendar.clone() as Calendar
+        cal.set(Calendar.DAY_OF_MONTH, 1)
+        cal.set(Calendar.HOUR_OF_DAY, 0)
+        cal.set(Calendar.MINUTE, 0)
+        cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        return cal.timeInMillis
+    }
+
+    private fun getEndOfMonth(calendar: Calendar): Long {
+        val cal = calendar.clone() as Calendar
+        cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH))
+        cal.set(Calendar.HOUR_OF_DAY, 23)
+        cal.set(Calendar.MINUTE, 59)
+        cal.set(Calendar.SECOND, 59)
+        cal.set(Calendar.MILLISECOND, 999)
+        return cal.timeInMillis
+    }
+
+    private fun getDaysInMonth(calendar: Calendar): Int {
+        return calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
     }
 
     // Также обновите loadHabits() аналогичным образом

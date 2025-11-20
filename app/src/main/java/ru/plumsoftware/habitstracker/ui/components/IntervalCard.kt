@@ -99,7 +99,7 @@ fun IntervalCard(
         Row(
             modifier = Modifier
                 .wrapContentSize()
-                .padding(horizontal = Dimen.medium, vertical = Dimen.medium),
+                .padding(horizontal = Dimen.medium, vertical = Dimen.smallPlus),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(
                 space = Dimen.smallPlus,

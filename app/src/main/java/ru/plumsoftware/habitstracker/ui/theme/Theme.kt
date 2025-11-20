@@ -5,7 +5,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 @Immutable
@@ -381,21 +383,37 @@ val unspecified_scheme = ColorFamily(
     Color.Unspecified, Color.Unspecified, Color.Unspecified, Color.Unspecified
 )
 
+// Добавьте этот код в ваш файл с темой
+val LocalExtendedColorScheme = staticCompositionLocalOf { extendedLight }
+
 @Composable
 fun AppTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable() () -> Unit
+    // Добавьте параметры для контрастности если нужно
+    dynamicColor: Boolean = true, // или false, в зависимости от ваших потребностей
+    content: @Composable () -> Unit
 ) {
     val colorScheme = when {
         darkTheme -> darkScheme
         else -> lightScheme
     }
 
+    // Выбираем соответствующую расширенную схему
+    val extendedColorScheme = when {
+        darkTheme -> extendedDark
+        else -> extendedLight
+    }
+
     MaterialTheme(
         colorScheme = colorScheme,
         typography = AppTypography,
-        shapes = shapes,
-        content = content
-    )
+        shapes = shapes
+    ) {
+        CompositionLocalProvider(
+            LocalExtendedColorScheme provides extendedColorScheme
+        ) {
+            content()
+        }
+    }
 }
 
