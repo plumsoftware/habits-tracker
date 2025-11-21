@@ -1,0 +1,105 @@
+{
+  "project_info": {
+    "project_number": "167076322033",
+    "project_id": "utils-2415f",
+    "storage_bucket": "utils-2415f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:167076322033:android:2f96cc300a7855fc3e2750",
+        "android_client_info": {
+          "package_name": "ru.plumsoftware.calculator"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIyGfcd4d_uzf3mu_P9ed0dv8gu7_jWlU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:167076322033:android:7d0e4946cf8bd3d93e2750",
+        "android_client_info": {
+          "package_name": "ru.plumsoftware.habitstracker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIyGfcd4d_uzf3mu_P9ed0dv8gu7_jWlU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:167076322033:android:3fbf0e3968c1c7013e2750",
+        "android_client_info": {
+          "package_name": "ru.plumsoftware.notepad"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIyGfcd4d_uzf3mu_P9ed0dv8gu7_jWlU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:167076322033:android:ff78ba8f412610f03e2750",
+        "android_client_info": {
+          "package_name": "ru.plumsoftware.passwordgenerator"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIyGfcd4d_uzf3mu_P9ed0dv8gu7_jWlU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:167076322033:android:7635f1d083fd42d53e2750",
+        "android_client_info": {
+          "package_name": "ru.plumsoftware.pdfdocuments"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIyGfcd4d_uzf3mu_P9ed0dv8gu7_jWlU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
