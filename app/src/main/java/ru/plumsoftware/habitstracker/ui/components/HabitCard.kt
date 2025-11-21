@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
@@ -62,15 +60,14 @@ fun HabitCard(
                 .fillMaxWidth()
                 .padding(horizontal = Dimen.extraLarge, vertical = Dimen.extraLarge),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
-            Column(
-                modifier = Modifier.wrapContentSize(),
-                horizontalAlignment = Alignment.Start,
-                verticalArrangement = Arrangement.spacedBy(
-                    space = Dimen.medium,
-                    alignment = Alignment.CenterVertically
-                )
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = Dimen.medium),
+                horizontalArrangement = Arrangement.spacedBy(Dimen.medium),
+                verticalAlignment = Alignment.Top
             ) {
                 // Время всегда отображается
                 TimeCard(
@@ -80,20 +77,11 @@ fun HabitCard(
                 )
 
                 Column(
-                    modifier = Modifier.wrapContentSize(),
-                    horizontalAlignment = Alignment.Start,
-                    verticalArrangement = Arrangement.spacedBy(
-                        space = Dimen.medium,
-                        alignment = Alignment.CenterVertically
-                    )
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.Start
                 ) {
                     Column(
-                        modifier = Modifier.wrapContentSize(),
-                        horizontalAlignment = Alignment.Start,
-                        verticalArrangement = Arrangement.spacedBy(
-                            space = Dimen.small,
-                            alignment = Alignment.CenterVertically
-                        )
+                        verticalArrangement = Arrangement.spacedBy(Dimen.small)
                     ) {
                         Text(
                             text = habitWithStatus.habit.title.trim(),
@@ -110,6 +98,7 @@ fun HabitCard(
                     // Показываем напоминание с иконкой, если оно включено
                     if (hasReminder) {
                         Row(
+                            modifier = Modifier.padding(top = Dimen.medium),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(Dimen.small)
                         ) {
