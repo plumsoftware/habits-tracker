@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -62,64 +61,59 @@ fun HabitCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(end = Dimen.medium),
-                horizontalArrangement = Arrangement.spacedBy(Dimen.medium),
-                verticalAlignment = Alignment.Top
+                    .padding(end = Dimen.medium)
             ) {
-                // Время всегда отображается
+                // TimeCard сверху
                 TimeCard(
                     time = "${habitWithStatus.habit.reminderTimeHour}:${if (habitWithStatus.habit.reminderTimeMinute == 0) "00" else habitWithStatus.habit.reminderTimeMinute}",
                     isClickable = false,
                     onSelectedTime = { _, _ -> }
                 )
 
+                // Затем текст
                 Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.Start
+                    verticalArrangement = Arrangement.spacedBy(Dimen.small)
                 ) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(Dimen.small)
-                    ) {
+                    Text(
+                        text = habitWithStatus.habit.title.trim(),
+                        style = MaterialTheme.typography.titleLarge
+                    )
+
+                    if (habitWithStatus.habit.body.isNotEmpty())
                         Text(
-                            text = habitWithStatus.habit.title.trim(),
-                            style = MaterialTheme.typography.titleLarge
+                            text = habitWithStatus.habit.body.trim(),
+                            style = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.outline)
                         )
+                }
 
-                        if (habitWithStatus.habit.body.isNotEmpty())
-                            Text(
-                                text = habitWithStatus.habit.body.trim(),
-                                style = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.outline)
-                            )
-                    }
-
-                    // Показываем напоминание с иконкой, если оно включено
-                    if (hasReminder) {
-                        Row(
-                            modifier = Modifier.padding(top = Dimen.medium),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Dimen.small)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Notifications,
-                                contentDescription = "Напоминание включено",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = "Напоминание за ${habitWithStatus.habit.reminderInterval} мин.",
-                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.primary)
-                            )
-                        }
+                // Показываем напоминание с иконкой, если оно включено
+                if (hasReminder) {
+                    Row(
+                        modifier = Modifier.padding(top = Dimen.medium),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Dimen.small)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Напоминание включено",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Напоминание за ${habitWithStatus.habit.reminderInterval} мин.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.primary)
+                        )
                     }
                 }
             }
 
+            // Чекбокс справа по центру
             Box(
                 modifier = Modifier
-                    .wrapContentSize()
+                    .align(Alignment.CenterVertically)
             ) {
                 // Кастомный чекбокс с иконкой
                 Box(
