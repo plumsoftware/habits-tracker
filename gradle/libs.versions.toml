@@ -7,6 +7,7 @@ junitVersion = "1.3.0"
 espressoCore = "3.7.0"
 lifecycleRuntimeKtx = "2.9.4"
 activityCompose = "1.11.0"
+mobileads = "7.17.0"
 workRuntimeKtx = "2.10.3"
 kotlinxSerializationJson = "1.7.0"
 composeBom = "2024.09.00"
@@ -32,6 +33,7 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workRuntimeKtx" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
 androidx-compose-animation = { group = "androidx.compose.animation", name = "animation", version.ref = "animation" }
+mobileads = { module = "com.yandex.android:mobileads", version.ref = "mobileads" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
