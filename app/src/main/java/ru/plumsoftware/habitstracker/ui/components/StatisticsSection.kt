@@ -30,6 +30,7 @@ import ru.plumsoftware.habitstracker.ui.screen.main.home.MonthlyStats
 import ru.plumsoftware.habitstracker.ui.theme.Dimen
 import ru.plumsoftware.habitstracker.ui.theme.LocalExtendedColorScheme
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -69,6 +70,8 @@ fun MonthlyStatsCard(
     selectedMonth: Int,
     modifier: Modifier = Modifier
 ) {
+    val motivationMessage = getMonthlyMotivationMessage(monthlyStats.completionRate)
+
     Card(
         modifier = modifier,
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -86,50 +89,63 @@ fun MonthlyStatsCard(
                 color = MaterialTheme.colorScheme.primary
             )
 
-            // Основные показатели
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+            // Показатели статистики - по два в ряд
+            Column(
+                verticalArrangement = Arrangement.spacedBy(Dimen.medium)
             ) {
-                StatItem(
-                    title = "Всего привычек",
-                    value = monthlyStats.totalHabits.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-                StatItem(
-                    title = "Выполнено",
-                    value = monthlyStats.completedHabits.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-                StatItem(
-                    title = "Успешность",
-                    value = "${(monthlyStats.completionRate * 100).toInt()}%",
-                    modifier = Modifier.weight(1f)
-                )
+                // Первая строка: Всего привычек и Выполнено
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    StatItem(
+                        title = "Всего привычек",
+                        value = monthlyStats.totalHabits.toString(),
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatItem(
+                        title = "Выполнено",
+                        value = monthlyStats.completedHabits.toString(),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                // Вторая строка: Не выполнено и Успешность
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    StatItem(
+                        title = "Не выполнено",
+                        value = monthlyStats.uncompletedHabits.toString(),
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatItem(
+                        title = "Успешность",
+                        value = "${(monthlyStats.completionRate * 100).toInt()}%",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
 
-            // Прогресс бар как в дневной статистике
+            // Прогресс бар
             MonthlyProgressBar(
                 completionRate = monthlyStats.completionRate,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(8.dp)
             )
+
+            // Мотивирующее сообщение
+            Text(
+                text = motivationMessage,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
-}
-
-@Composable
-fun MonthlyProgressBar(
-    completionRate: Float,
-    modifier: Modifier = Modifier
-) {
-    LinearProgressIndicator(
-        progress = completionRate,
-        modifier = modifier,
-        color = MaterialTheme.colorScheme.primary,
-        trackColor = MaterialTheme.colorScheme.primaryContainer
-    )
 }
 
 @Composable
@@ -138,6 +154,9 @@ fun DailyStatsCard(
     selectedDate: Long,
     modifier: Modifier = Modifier
 ) {
+    val motivationMessage = getDailyMotivationMessage(dailyStats.completionRate)
+    val isToday = isToday(selectedDate)
+
     Card(
         modifier = modifier,
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -155,25 +174,43 @@ fun DailyStatsCard(
                 color = MaterialTheme.colorScheme.primary
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+            // Показатели статистики - по два в ряд
+            Column(
+                verticalArrangement = Arrangement.spacedBy(Dimen.medium)
             ) {
-                StatItem(
-                    title = "Всего на сегодня",
-                    value = dailyStats.totalHabits.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-                StatItem(
-                    title = "Выполнено",
-                    value = "${dailyStats.completedHabits}/${dailyStats.totalHabits}",
-                    modifier = Modifier.weight(1f)
-                )
-                StatItem(
-                    title = "Прогресс",
-                    value = "${(dailyStats.completionRate * 100).toInt()}%",
-                    modifier = Modifier.weight(1f)
-                )
+                // Первая строка: Всего на сегодня и Выполнено
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    StatItem(
+                        title = "Всего на сегодня",
+                        value = dailyStats.totalHabits.toString(),
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatItem(
+                        title = "Выполнено",
+                        value = dailyStats.completedHabits.toString(),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                // Вторая строка: Не выполнено и Прогресс
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    StatItem(
+                        title = "Не выполнено",
+                        value = dailyStats.uncompletedHabits.toString(),
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatItem(
+                        title = "Прогресс",
+                        value = "${(dailyStats.completionRate * 100).toInt()}%",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
 
             // Прогресс бар
@@ -185,8 +222,57 @@ fun DailyStatsCard(
                 color = MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.primaryContainer
             )
+
+            // Мотивирующее сообщение
+            Text(
+                text = if (isToday) motivationMessage else "Статистика за выбранный день",
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isToday) MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.outline,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
+}
+
+@Composable
+fun StatItem(
+    title: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleLarge, // Увеличим размер для лучшей читаемости
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+}
+
+@Composable
+fun MonthlyProgressBar(
+    completionRate: Float,
+    modifier: Modifier = Modifier
+) {
+    LinearProgressIndicator(
+        progress = completionRate,
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.primaryContainer
+    )
 }
 
 @Composable
@@ -250,33 +336,89 @@ fun MonthlyHistogram(
     }
 }
 
-@Composable
-fun StatItem(
-    title: String,
-    value: String,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
 // Вспомогательная функция для форматирования даты
 private fun formatDate(timestamp: Long): String {
     val dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.getDefault())
     return dateFormat.format(Date(timestamp))
+}
+
+// Функции для мотивирующих сообщений
+private fun getDailyMotivationMessage(completionRate: Float): String {
+    return when {
+        completionRate == 0f -> when ((0..2).random()) {
+            0 -> "Начните свой день с маленьких шагов! 🌟"
+            1 -> "Каждое начало - это уже победа! 💫"
+            else -> "Сегодня отличный день для начала! 🚀"
+        }
+        completionRate < 0.3f -> when ((0..2).random()) {
+            0 -> "Вы на правильном пути! Продолжайте! 👣"
+            1 -> "Маленькие шаги ведут к большим результатам! 🌱"
+            else -> "За этот день ещё не всё выполнено, но вы справитесь! 💪"
+        }
+        completionRate < 0.7f -> when ((0..2).random()) {
+            0 -> "Хорошая работа! Ещё немного усилий! 🔥"
+            1 -> "Вы на полпути! Продолжайте в том же духе! ⚡"
+            else -> "Отличный прогресс! Завершите начатое! 🌈"
+        }
+        completionRate < 1f -> when ((0..2).random()) {
+            0 -> "Почти у цели! Осталось совсем немного! 🎯"
+            1 -> "Финальный рывок! Вы почти у финиша! 🏁"
+            else -> "Не сдавайтесь! Вы так близки к успеху! ✨"
+        }
+        else -> when ((0..2).random()) {
+            0 -> "Идеальный день! Вы великолепны! 🎉"
+            1 -> "Потрясающе! Все задачи выполнены! 🌟"
+            else -> "100% успеха! Вы заслужили похвалу! 🏆"
+        }
+    }
+}
+
+private fun getMonthlyMotivationMessage(completionRate: Float): String {
+    return when {
+        completionRate == 0f -> when ((0..2).random()) {
+            0 -> "Каждый месяц - новая возможность! 🌟"
+            1 -> "Начните с одной привычки - остальное приложится! 💫"
+            else -> "Этот месяц может стать turning point! 🚀"
+        }
+        completionRate < 0.3f -> when ((0..2).random()) {
+            0 -> "Есть над чем поработать в следующем месяце 📈"
+            1 -> "Небольшие успехи - это тоже прогресс! 🌱"
+            else -> "Каждое усилие имеет значение! 💪"
+        }
+        completionRate < 0.7f -> when ((0..2).random()) {
+            0 -> "Стабильный прогресс - ключ к успеху! 🔑"
+            1 -> "Хорошая работа! Стремитесь к большему! ⭐"
+            else -> "Вы на верном пути! Продолжайте! 🌈"
+        }
+        completionRate < 1f -> when ((0..2).random()) {
+            0 -> "Отличные результаты! Почти идеально! 🎯"
+            1 -> "Впечатляющий прогресс за месяц! 🌟"
+            else -> "Вы близки к 100%! Следующий месяц будет идеальным! ✨"
+        }
+        else -> when ((0..2).random()) {
+            0 -> "Идеальный месяц! Вы - пример для подражания! 🏆"
+            1 -> "100% выполнение! Так держать! 🎉"
+            else -> "Потрясающая дисциплина! Вы восхитительны! 🌟"
+        }
+    }
+}
+
+// Функция для проверки, является ли дата сегодняшним днем
+private fun isToday(timestamp: Long): Boolean {
+    val today = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    val selectedDay = Calendar.getInstance().apply {
+        timeInMillis = timestamp
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    return today == selectedDay
 }

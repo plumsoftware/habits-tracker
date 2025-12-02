@@ -4,5 +4,6 @@ data class MonthlyStats(
     val totalHabits: Int = 0,
     val completedHabits: Int = 0,
     val completionRate: Float = 0f,
+    val uncompletedHabits: Int = 0,
     val dailyCompletions: Map<Int, Int> = emptyMap() // день месяца -> количество выполненных привычек
 )
