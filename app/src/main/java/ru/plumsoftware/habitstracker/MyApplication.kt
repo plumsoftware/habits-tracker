@@ -9,6 +9,7 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.dsl.module
+import ru.plumsoftware.habitstracker.data.config.PlatformConfig
 import ru.plumsoftware.habitstracker.data.database.HabitDatabase
 import ru.plumsoftware.habitstracker.data.database.HabitRepository
 import ru.plumsoftware.habitstracker.data.settings.ThemeRepository
@@ -44,5 +45,9 @@ class MyApplication : Application() {
                 )
             )
         }
+    }
+
+    companion object {
+        val platformConfig: PlatformConfig = PlatformConfig.RuStoreConfig()
     }
 }

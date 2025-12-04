@@ -81,4 +81,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.androidx.work.runtime.ktx)
+
+    //noinspection MobileAdsSdkVersion
+    implementation(libs.mobileads)
 }
