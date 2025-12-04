@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
+import ru.plumsoftware.habitstracker.data.database.AppStatsRepository
 import ru.plumsoftware.habitstracker.data.database.HabitRepository
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
@@ -18,7 +19,8 @@ import java.util.Calendar
 import java.util.Date
 
 class HomeViewModel(
-    private val repository: HabitRepository
+    private val repository: HabitRepository,
+    private val appStatsRepository: AppStatsRepository
 ) : ViewModel() {
     private val _state = MutableStateFlow(HomeState())
     val state: StateFlow<HomeState> = _state
@@ -26,6 +28,8 @@ class HomeViewModel(
     init {
         loadHabits()
         initDate()
+
+        recordAppLaunch()
     }
 
     fun onEvent(event: HomeEvent) {
@@ -340,9 +344,9 @@ class HomeViewModel(
     private fun sortHabitsByTime(habits: List<HabitWithStatus>): List<HabitWithStatus> {
         return habits.sortedWith(
             compareBy(
-            { it.habit.reminderTimeHour },
-            { it.habit.reminderTimeMinute }
-        ))
+                { it.habit.reminderTimeHour },
+                { it.habit.reminderTimeMinute }
+            ))
     }
 
     private fun loadHabitsForDate(date: Long, isFirstTime: Boolean = true) {
@@ -413,7 +417,11 @@ class HomeViewModel(
             var habitsWithCompletions = 0
 
             for (habit in allHabits) {
-                val completions = repository.habitCompletionDao.getCompletionsInPeriod(habit.id, startOfMonth, endOfMonth)
+                val completions = repository.habitCompletionDao.getCompletionsInPeriod(
+                    habit.id,
+                    startOfMonth,
+                    endOfMonth
+                )
                 val completedCount = completions.count { it.completed }
                 totalCompletions += completedCount
                 if (completedCount > 0) {
@@ -536,7 +544,8 @@ class HomeViewModel(
                             }
                         }
                     }
-            } catch (e: Exception) { }
+            } catch (e: Exception) {
+            }
         }
     }
 
@@ -551,9 +560,25 @@ class HomeViewModel(
         return calendar.timeInMillis
     }
 
+    //    region::Launch stats
+    private fun recordAppLaunch() {
+        viewModelScope.launch {
+            val shouldShowAds = appStatsRepository.recordAppLaunch()
+            _state.update {
+                it.copy(showOpenAds = shouldShowAds)
+            }
+        }
+    }
+//    endregion
+
     companion object {
         val viewModelModule = module {
-            viewModel { HomeViewModel(get()) }
+            viewModel {
+                HomeViewModel(
+                    get(),
+                    get()
+                )
+            }
         }
     }
 }

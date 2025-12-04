@@ -1,5 +1,8 @@
 package ru.plumsoftware.habitstracker.ui.screen.main
 
+import android.app.Activity
+import android.content.Context
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,10 +42,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.yandex.mobile.ads.appopenad.AppOpenAd
+import com.yandex.mobile.ads.appopenad.AppOpenAdEventListener
+import com.yandex.mobile.ads.appopenad.AppOpenAdLoadListener
+import com.yandex.mobile.ads.appopenad.AppOpenAdLoader
+import com.yandex.mobile.ads.common.AdError
+import com.yandex.mobile.ads.common.AdRequestConfiguration
+import com.yandex.mobile.ads.common.AdRequestError
+import com.yandex.mobile.ads.common.ImpressionData
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
+import ru.plumsoftware.habitstracker.MyApplication
 import ru.plumsoftware.habitstracker.R
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
@@ -92,6 +105,9 @@ fun HomeScreen(
         findNearestHabitIndex(state.habitsWithStatus)
     }
 
+    val activity = LocalActivity.current
+    val context = LocalContext.current
+
     // Автоматическая прокрутка при изменении списка привычек
     LaunchedEffect(state.habitsWithStatus, nearestHabitIndex) {
         if (nearestHabitIndex != -1 && state.habitsWithStatus.isNotEmpty()) {
@@ -108,6 +124,16 @@ fun HomeScreen(
         if (!showBottomSheet && state.editingHabit != null) {
             // Если закрыли BottomSheet в режиме редактирования, сбрасываем состояние
             viewModel.onEvent(HomeEvent.CloseEditBottomSheet)
+        }
+    }
+
+    LaunchedEffect(state.showOpenAds) {
+        if (state.showOpenAds) {
+            // Показать рекламу здесь
+            showOpenAds(
+                baseContext = context,
+                activity = activity
+            )
         }
     }
 
@@ -506,4 +532,45 @@ private fun findNearestHabitIndex(habits: List<HabitWithStatus>): Int {
     }
 
     return nearestIndex
+}
+
+private fun showOpenAds(baseContext: Context, activity: Activity?) {
+    val appOpenLoader = AppOpenAdLoader(baseContext)
+    val adRequestConfiguration =
+        AdRequestConfiguration.Builder(MyApplication.platformConfig.adsConfig.openAdsId).build()
+
+    val appOpenAdEventListener: AppOpenAdEventListener = object : AppOpenAdEventListener {
+        override fun onAdShown() {
+        }
+
+        override fun onAdDismissed() {
+
+        }
+
+        override fun onAdFailedToShow(adError: AdError) {
+
+        }
+
+        override fun onAdClicked() {
+
+        }
+
+        override fun onAdImpression(impressionData: ImpressionData?) {
+        }
+    }
+
+    val appOpenAdLoadListener: AppOpenAdLoadListener = object : AppOpenAdLoadListener {
+        override fun onAdFailedToLoad(error: AdRequestError) {
+        }
+
+        override fun onAdLoaded(appOpenAd: AppOpenAd) {
+            appOpenAd.setAdEventListener(appOpenAdEventListener)
+
+            if (activity != null)
+                appOpenAd.show(activity)
+        }
+    }
+
+    appOpenLoader.setAdLoadListener(appOpenAdLoadListener)
+    appOpenLoader.loadAd(adRequestConfiguration)
 }
