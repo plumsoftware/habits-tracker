@@ -7,8 +7,6 @@ import androidx.core.app.NotificationCompat
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Data
-import androidx.work.ExistingWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
 import ru.plumsoftware.habitstracker.R
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.Periodicity
@@ -46,80 +44,55 @@ class HabitNotificationManager(private val context: Context) {
     }
 
     fun scheduleHabitNotification(habit: Habit) {
-        // Отменяем старые уведомления
+        // Проверяем, есть ли разрешение на уведомления
+        if (!NotificationUtils.areNotificationsEnabled(context)) {
+            return
+        }
+
+        // Если интервал напоминания = 0, не планируем уведомления
+        if (habit.reminderInterval == 0) {
+            cancelHabitNotification(habit.id)
+            return
+        }
+
+        // Отменяем предыдущие уведомления для этой привычки
         cancelHabitNotification(habit.id)
 
-        // Рассчитываем время первого уведомления
-        val firstNotificationTime = calculateFirstNotificationTime(habit)
+        // Вычисляем время уведомления (время привычки - интервал)
+        val notificationTime = calculateNotificationTime(habit)
 
-        // Создаем рабочую задачу
-        val notificationWork = OneTimeWorkRequestBuilder<HabitNotificationWorker>()
-            .setInitialDelay(firstNotificationTime, TimeUnit.MILLISECONDS)
-            .setInputData(
-                Data.Builder()
-                    .putString("habit_id", habit.id)
-                    .putString("habit_title", habit.title)
-                    .putString("habit_body", habit.body)
-                    .putInt("hour", habit.reminderTimeHour)
-                    .putInt("minute", habit.reminderTimeMinute)
-                    .putInt("interval", habit.reminderInterval)
-                    .build()
-            )
-            .addTag("habit_notification_${habit.id}")
-            .build()
-
-        // Для периодических уведомлений создаем цепочку
-        val periodicWork = PeriodicWorkRequestBuilder<HabitNotificationWorker>(
-            when (habit.periodicity) {
-                Periodicity.DAILY -> 1
-                Periodicity.WEEKLY -> 7
-            },
-            TimeUnit.DAYS
-        )
-            .setInitialDelay(firstNotificationTime, TimeUnit.MILLISECONDS)
-            .setInputData(
-                Data.Builder()
-                    .putString("habit_id", habit.id)
-                    .putString("habit_title", habit.title)
-                    .putString("habit_body", habit.body)
-                    .putInt("hour", habit.reminderTimeHour)
-                    .putInt("minute", habit.reminderTimeMinute)
-                    .putInt("interval", habit.reminderInterval)
-                    .build()
-            )
-            .addTag("habit_periodic_${habit.id}")
-            .build()
-
-        // Используйте OneTimeWorkRequest для цепочки или PeriodicWorkRequest
-        // для истинно периодических уведомлений
-
-        WorkManager.getInstance(context)
-            .beginUniqueWork(
-                "habit_notification_${habit.id}",
-                ExistingWorkPolicy.REPLACE,
-                notificationWork
-            )
-            .enqueue()
-    }
-
-    private fun calculateFirstNotificationTime(habit: Habit): Long {
-        val calendar = Calendar.getInstance().apply {
-            timeInMillis = System.currentTimeMillis()
-            set(Calendar.HOUR_OF_DAY, habit.reminderTimeHour)
-            set(Calendar.MINUTE, habit.reminderTimeMinute)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
+        // Если время уведомления уже прошло, не планируем
+        if (notificationTime <= System.currentTimeMillis()) {
+            return
         }
 
-        // Если время уже прошло сегодня, планируем на завтра/следующую неделю
-        if (calendar.timeInMillis <= System.currentTimeMillis()) {
-            when (habit.periodicity) {
-                Periodicity.DAILY -> calendar.add(Calendar.DAY_OF_YEAR, 1)
-                Periodicity.WEEKLY -> calendar.add(Calendar.DAY_OF_YEAR, 7)
+        val inputData = Data.Builder()
+            .putString("habit_id", habit.id)
+            .putString("habit_title", habit.title)
+            .putString("habit_body", habit.body)
+            .putInt("hour", habit.reminderTimeHour)
+            .putInt("minute", habit.reminderTimeMinute)
+            .putInt("interval", habit.reminderInterval)
+            .build()
+
+        val delay = notificationTime - System.currentTimeMillis()
+
+        val workRequest = OneTimeWorkRequestBuilder<HabitNotificationWorker>()
+            .setInitialDelay(delay, TimeUnit.MILLISECONDS)
+            .setInputData(inputData)
+            .addTag("habit_${habit.id}")
+            .build()
+
+        WorkManager.getInstance(context).enqueue(workRequest)
+
+        // Для периодических привычек планируем следующие уведомления
+        if (habit.reminderInterval > 0) {
+            if (habit.periodicity == Periodicity.DAILY) {
+                scheduleDailyHabitNotifications(habit)
+            } else if (habit.periodicity == Periodicity.WEEKLY) {
+                scheduleWeeklyHabitNotifications(habit)
             }
         }
-
-        return calendar.timeInMillis - System.currentTimeMillis()
     }
 
     private fun calculateNotificationTime(habit: Habit): Long {
@@ -233,16 +206,13 @@ class HabitNotificationManager(private val context: Context) {
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.icon)
-            .setContentTitle("Напоминание о привычке")
+            .setContentTitle(habit.title)
             .setContentText("${habit.title} - через ${habit.reminderInterval} минут")
             .setStyle(
                 NotificationCompat.BigTextStyle()
                     .bigText(
-                        "Привычка: ${habit.title}\n" +
-                                "Описание: ${habit.body}\n" +
-                                "Время: ${habit.reminderTimeHour}:${
-                                    habit.reminderTimeMinute.toString().padStart(2, '0')
-                                }"
+                        habit.body
+//                        "Время: ${habit.reminderTimeHour}:${habit.reminderTimeMinute.toString().padStart(2, '0')}"
                     )
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
