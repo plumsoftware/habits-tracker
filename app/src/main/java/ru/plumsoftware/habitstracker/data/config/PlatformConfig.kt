@@ -14,4 +14,10 @@ sealed class PlatformConfig (
     ) : PlatformConfig (
         adsConfig = adsConfig,
     )
+
+    data class GooglePlayConfig (
+        override val adsConfig: AdsConfig = AdsConfig.GooglePlay()
+    ) : PlatformConfig (
+        adsConfig = adsConfig,
+    )
 }

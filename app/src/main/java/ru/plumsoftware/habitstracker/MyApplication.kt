@@ -50,6 +50,6 @@ class MyApplication : Application() {
     }
 
     companion object {
-        val platformConfig: PlatformConfig = PlatformConfig.RuStoreConfig()
+        val platformConfig: PlatformConfig = PlatformConfig.GooglePlayConfig()
     }
 }

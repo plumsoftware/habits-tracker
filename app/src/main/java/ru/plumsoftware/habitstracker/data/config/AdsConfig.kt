@@ -26,4 +26,14 @@ sealed class AdsConfig(
         interstitialAdsId = interstitialAdsId,
         rewardedAdsId = rewardedAdsId
     )
+
+    data class GooglePlay (
+        override val openAdsId: String =  if (BuildConfig.DEBUG) "demo-appopenad-yandex" else "R-M-17944291-1",
+        override val interstitialAdsId: String = if (BuildConfig.DEBUG) "demo-interstitial-yandex" else "R-M-17944291-3",
+        override val rewardedAdsId: String = if (BuildConfig.DEBUG) "demo-rewarded-yandex" else "R-M-17944291-2"
+    ) : AdsConfig (
+        openAdsId = openAdsId,
+        interstitialAdsId = interstitialAdsId,
+        rewardedAdsId = rewardedAdsId
+    )
 }
