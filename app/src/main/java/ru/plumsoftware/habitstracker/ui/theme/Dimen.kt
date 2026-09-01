@@ -10,9 +10,22 @@ object Dimen {
     val large = 14.dp
     val extraLarge = 18.dp
 
+    // Внутренние отступы карточек по макету
+    val cardPadding = 18.dp
+
     val bottomBarIconSize = 28.dp
 
     object Size {
         val defaultCalendarLineItemWidth = 40.dp
+
+        // Квадратный чип с иконкой (настройки, уведомления)
+        val iconChip = 44.dp
+        // Радиус чекбокса выполнения привычки
+        val checkbox = 26.dp
+        // Столбец графика активности
+        val chartBarWidth = 26.dp
+        val chartBarMaxHeight = 90.dp
+        // Точка «непрочитано»
+        val unreadDot = 8.dp
     }
 }

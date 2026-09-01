@@ -12,15 +12,20 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 import ru.plumsoftware.habitstracker.data.database.AppStatsRepository
 import ru.plumsoftware.habitstracker.data.database.HabitRepository
+import ru.plumsoftware.habitstracker.data.database.NotificationRepository
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
+import ru.plumsoftware.habitstracker.data.model.NotificationType
+import ru.plumsoftware.habitstracker.data.settings.SettingsRepository
 import ru.plumsoftware.habitstracker.ui.screen.main.MainScreenStates
 import java.util.Calendar
 import java.util.Date
 
 class HomeViewModel(
     private val repository: HabitRepository,
-    private val appStatsRepository: AppStatsRepository
+    private val appStatsRepository: AppStatsRepository,
+    private val notificationRepository: NotificationRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
     private val _state = MutableStateFlow(HomeState())
     val state: StateFlow<HomeState> = _state
@@ -30,6 +35,22 @@ class HomeViewModel(
         initDate()
 
         recordAppLaunch()
+        observeWeekStart()
+    }
+
+    // Реагируем на смену «Начала недели» в настройках без перезагрузки экрана
+    private fun observeWeekStart() {
+        viewModelScope.launch {
+            settingsRepository.settings.collect { settings ->
+                val firstDayOfWeek = when (settings.weekStart) {
+                    ru.plumsoftware.habitstracker.data.settings.WeekStart.SUNDAY -> Calendar.SUNDAY
+                    else -> Calendar.MONDAY
+                }
+                if (_state.value.firstDayOfWeek != firstDayOfWeek) {
+                    _state.update { it.copy(firstDayOfWeek = firstDayOfWeek) }
+                }
+            }
+        }
     }
 
     fun onEvent(event: HomeEvent) {
@@ -184,6 +205,8 @@ class HomeViewModel(
                 repository.markHabitCompleted(habitId, state.value.selectedDate)
                 Log.d("HomeViewModel", "Привычка $habitId успешно отмечена как выполненная")
                 // Данные автоматически обновятся через Flow
+                notifyHabitCompleted(habitId)
+                refreshWidgets()
             } catch (e: Exception) {
                 Log.e("HomeViewModel", "Ошибка отметки привычки $habitId: ${e.message}", e)
                 _state.update {
@@ -195,6 +218,91 @@ class HomeViewModel(
         }
     }
 
+    /**
+     * Пишет уведомления «привычка выполнена» и «серия N дней» в БД
+     * с учётом пользовательских настроек (push / оповещать о сериях).
+     */
+    private suspend fun notifyHabitCompleted(habitId: String) {
+        try {
+            val settings = settingsRepository.current()
+            val title = state.value.habitsWithStatus
+                .firstOrNull { it.habit.id == habitId }?.habit?.title ?: return
+
+            if (settings.pushEnabled) {
+                notificationRepository.add(
+                    title = "Привычка выполнена",
+                    body = "Вы отметили «$title». Так держать!",
+                    type = NotificationType.HABIT_DONE
+                )
+            }
+
+            if (settings.seriesEnabled) {
+                val streak = calculateStreak(habitId)
+                // Уведомляем о серии каждые 3 дня (3, 6, 9, …)
+                if (streak >= 3 && streak % 3 == 0) {
+                    notificationRepository.add(
+                        title = "Серия $streak ${daysWord(streak)}! 🔥",
+                        body = "Вы выполняете «$title» ${streak} ${daysWord(streak)} подряд",
+                        type = NotificationType.STREAK
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("HomeViewModel", "Ошибка уведомления о выполнении: ${e.message}", e)
+        }
+    }
+
+    /** Просит систему перерисовать виджеты после изменения данных. */
+    private fun refreshWidgets() {
+        viewModelScope.launch {
+            try {
+                val context = org.koin.core.context.GlobalContext.get().get<android.content.Context>()
+                ru.plumsoftware.habitstracker.ui.widget.WidgetDataLoader.refreshAll(context)
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "Не удалось обновить виджеты: ${e.message}", e)
+            }
+        }
+    }
+
+    /** Длина серии подряд выполненных дней, заканчивающейся выбранной датой. */
+    private suspend fun calculateStreak(habitId: String): Int {
+        val completions = repository.habitCompletionDao.getAllCompletionsForHabit(habitId)
+        val completedDays = completions
+            .filter { it.completed }
+            .map { startOfDayMillis(it.completionDate) }
+            .toSet()
+
+        val dayMs = 24 * 60 * 60 * 1000L
+        var cursor = startOfDayMillis(state.value.selectedDate)
+        var streak = 0
+        while (completedDays.contains(cursor)) {
+            streak++
+            cursor -= dayMs
+        }
+        return streak
+    }
+
+    private fun startOfDayMillis(timestamp: Long): Long {
+        return Calendar.getInstance().apply {
+            timeInMillis = timestamp
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+
+    private fun daysWord(n: Int): String {
+        val mod100 = n % 100
+        val mod10 = n % 10
+        return when {
+            mod100 in 11..14 -> "дней"
+            mod10 == 1 -> "день"
+            mod10 in 2..4 -> "дня"
+            else -> "дней"
+        }
+    }
+
     private fun unmarkHabitCompleted(habitId: String) {
         Log.d("HomeViewModel", "Снимаем отметку выполнения с привычки: $habitId")
         viewModelScope.launch {
@@ -202,6 +310,7 @@ class HomeViewModel(
                 repository.unmarkHabitCompleted(habitId, state.value.selectedDate)
                 Log.d("HomeViewModel", "Отметка с привычки $habitId успешно снята")
                 // Данные автоматически обновятся через Flow
+                refreshWidgets()
             } catch (e: Exception) {
                 Log.e("HomeViewModel", "Ошибка снятия отметки с привычки $habitId: ${e.message}", e)
                 _state.update {
@@ -369,6 +478,12 @@ class HomeViewModel(
                     // Загружаем статистику
                     val dailyStats = calculateDailyStats(sortedHabits)
                     val monthlyStats = loadMonthlyStats(date)
+                    val weeklyStats = loadWeeklyStats(date)
+                    val dayProgress = loadDayProgress(date)
+                    val firstDayOfWeek = when (settingsRepository.current().weekStart) {
+                        ru.plumsoftware.habitstracker.data.settings.WeekStart.SUNDAY -> Calendar.SUNDAY
+                        else -> Calendar.MONDAY
+                    }
 
                     if (isFirstTime) {
                         _state.update {
@@ -377,7 +492,10 @@ class HomeViewModel(
                                 allHabitsSize = sortedHabits.size,
                                 isLoading = false,
                                 dailyStats = dailyStats,
-                                monthlyStats = monthlyStats
+                                monthlyStats = monthlyStats,
+                                weeklyStats = weeklyStats,
+                                dayProgress = dayProgress,
+                                firstDayOfWeek = firstDayOfWeek
                             )
                         }
                     } else {
@@ -386,7 +504,10 @@ class HomeViewModel(
                                 habitsWithStatus = sortedHabits,
                                 isLoading = false,
                                 dailyStats = dailyStats,
-                                monthlyStats = monthlyStats
+                                monthlyStats = monthlyStats,
+                                weeklyStats = weeklyStats,
+                                dayProgress = dayProgress,
+                                firstDayOfWeek = firstDayOfWeek
                             )
                         }
                     }
@@ -446,6 +567,81 @@ class HomeViewModel(
         } catch (e: Exception) {
             Log.e("HomeViewModel", "Ошибка загрузки месячной статистики: ${e.message}", e)
             MonthlyStats()
+        }
+    }
+
+    /**
+     * Считает активность за неделю, содержащую [date]: для каждого из 7 дней —
+     * число выполненных привычек. Начало недели берётся из настроек.
+     */
+    private suspend fun loadWeeklyStats(date: Long): WeeklyStats {
+        return try {
+            val firstDayOfWeek = when (settingsRepository.current().weekStart) {
+                ru.plumsoftware.habitstracker.data.settings.WeekStart.SUNDAY -> Calendar.SUNDAY
+                else -> Calendar.MONDAY
+            }
+
+            val dayMs = 24 * 60 * 60 * 1000L
+            val selectedStart = startOfDayMillis(date)
+
+            // Находим начало недели
+            val cal = Calendar.getInstance().apply {
+                this.firstDayOfWeek = firstDayOfWeek
+                timeInMillis = date
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val delta = (cal.get(Calendar.DAY_OF_WEEK) - firstDayOfWeek + 7) % 7
+            cal.add(Calendar.DAY_OF_MONTH, -delta)
+            val weekStartMs = cal.timeInMillis
+            val weekEndMs = weekStartMs + 7 * dayMs - 1
+
+            // Считаем выполнения за неделю и раскладываем по дням
+            val completions = repository.habitCompletionDao.getCompletedInRange(weekStartMs, weekEndMs)
+            val perDay = completions.groupingBy { startOfDayMillis(it.completionDate) }.eachCount()
+
+            val dayNameFormat = java.text.SimpleDateFormat("EEE", java.util.Locale.getDefault())
+            val days = (0 until 7).map { i ->
+                val dayMillis = weekStartMs + i * dayMs
+                val dayCal = Calendar.getInstance().apply { timeInMillis = dayMillis }
+                DayActivity(
+                    dayOfMonth = dayCal.get(Calendar.DAY_OF_MONTH),
+                    dayName = dayNameFormat.format(dayCal.time).lowercase(),
+                    completedCount = perDay[dayMillis] ?: 0,
+                    isSelected = dayMillis == selectedStart
+                )
+            }
+            WeeklyStats(days = days)
+        } catch (e: Exception) {
+            Log.e("HomeViewModel", "Ошибка загрузки недельной статистики: ${e.message}", e)
+            WeeklyStats()
+        }
+    }
+
+    /**
+     * Доля выполненных привычек по дням для месяца вокруг [date]
+     * (± неделя, чтобы покрыть крайние ячейки календаря). Ключ — начало дня в ms.
+     */
+    private suspend fun loadDayProgress(date: Long): Map<Long, Float> {
+        return try {
+            val total = repository.getAllHabits().first().size
+            if (total == 0) return emptyMap()
+
+            val dayMs = 24 * 60 * 60 * 1000L
+            val cal = Calendar.getInstance().apply { timeInMillis = date }
+            val monthStart = getStartOfMonth(cal) - 7 * dayMs
+            val monthEnd = getEndOfMonth(cal) + 7 * dayMs
+
+            val completions = repository.habitCompletionDao.getCompletedInRange(monthStart, monthEnd)
+            completions
+                .groupingBy { startOfDayMillis(it.completionDate) }
+                .eachCount()
+                .mapValues { (_, count) -> (count.toFloat() / total).coerceIn(0f, 1f) }
+        } catch (e: Exception) {
+            Log.e("HomeViewModel", "Ошибка расчёта прогресса по дням: ${e.message}", e)
+            emptyMap()
         }
     }
 
@@ -575,6 +771,8 @@ class HomeViewModel(
         val viewModelModule = module {
             viewModel {
                 HomeViewModel(
+                    get(),
+                    get(),
                     get(),
                     get()
                 )

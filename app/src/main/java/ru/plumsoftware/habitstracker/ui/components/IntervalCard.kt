@@ -36,7 +36,8 @@ import ru.plumsoftware.habitstracker.ui.theme.Dimen
 @Composable
 fun IntervalCard(
     initialInterval: Int? = null,
-    onSelectedTime: (Int) -> Unit
+    onSelectedTime: (Int) -> Unit,
+    modifier: Modifier = Modifier.wrapContentSize()
 ) {
     var showDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -85,10 +86,10 @@ fun IntervalCard(
     var currentInterval by remember { mutableStateOf(initialSelected) }
 
     Card(
-        modifier = Modifier
-            .wrapContentSize(),
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             contentColor = MaterialTheme.colorScheme.onSurface
         ),
         elevation = CardDefaults.elevatedCardElevation(0.dp, 0.dp, 0.dp),
@@ -98,16 +99,13 @@ fun IntervalCard(
     ) {
         Row(
             modifier = Modifier
-                .wrapContentSize()
-                .padding(horizontal = Dimen.medium, vertical = Dimen.smallPlus),
+                .fillMaxWidth()
+                .padding(horizontal = Dimen.large, vertical = Dimen.mediumPlus),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(
-                space = Dimen.smallPlus,
-                alignment = Alignment.CenterHorizontally
-            )
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = if (currentInterval.second == 0) "Не напоминать" else "за ${currentInterval.first}",
+                text = currentInterval.first,
                 style = MaterialTheme.typography.bodyMedium
             )
 

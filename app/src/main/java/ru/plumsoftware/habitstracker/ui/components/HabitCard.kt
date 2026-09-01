@@ -24,7 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
@@ -34,21 +34,23 @@ import ru.plumsoftware.habitstracker.ui.theme.Dimen
 fun HabitCard(
     habitWithStatus: HabitWithStatus,
     onClick: (Habit) -> Unit,
-    onDone: (Boolean) -> Unit
+    onDone: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val isDone = habitWithStatus.completed ?: false
     val hasReminder = habitWithStatus.habit.reminderInterval > 0
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
         ),
-        border = BorderStroke(
-            width = if (isDone) 1.dp else 0.dp,
-            color = if (isDone) MaterialTheme.colorScheme.primary else Color.Transparent
-        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = if (isDone) BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+        ) else null,
         shape = MaterialTheme.shapes.medium,
         onClick = {
             onClick(habitWithStatus.habit)
@@ -110,26 +112,37 @@ fun HabitCard(
                 }
             }
 
-            // Чекбокс справа по центру
+            // Чекбокс справа по центру. Внешний Box фиксированного размера,
+            // поэтому позиция чекбокса одинакова в отмеченном и неотмеченном состоянии.
             Box(
                 modifier = Modifier
+                    .padding(Dimen.smallPlus)
                     .align(Alignment.CenterVertically)
+                    .size(Dimen.Size.checkbox),
+                contentAlignment = Alignment.Center
             ) {
                 // Кастомный чекбокс с иконкой
                 Box(
                     modifier = Modifier
-                        .size(24.dp)
-                        .clip(RoundedCornerShape(6.dp))
+                        .size(Dimen.Size.checkbox)
+                        .shadow(
+                            elevation = if (isDone) 12.dp else 0.dp,
+                            shape = MaterialTheme.shapes.small,
+                            clip = false,
+                            ambientColor = MaterialTheme.colorScheme.primary,
+                            spotColor = MaterialTheme.colorScheme.primary
+                        )
+                        .clip(MaterialTheme.shapes.small)
                         .background(
                             color = if (isDone) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(6.dp)
+                            else MaterialTheme.colorScheme.surfaceContainerLowest,
+                            shape = MaterialTheme.shapes.small
                         )
                         .border(
-                            width = 1.dp,
+                            width = 1.5.dp,
                             color = if (isDone) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outline,
-                            shape = RoundedCornerShape(6.dp)
+                            else MaterialTheme.colorScheme.outlineVariant,
+                            shape = MaterialTheme.shapes.small
                         )
                         .clickable { onDone(!isDone) },
                     contentAlignment = Alignment.Center
@@ -139,7 +152,7 @@ fun HabitCard(
                             imageVector = Icons.Default.Check,
                             contentDescription = "Выполнено",
                             tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -36,8 +37,10 @@ fun IOSSwitch(
         label = "thumb_animation"
     )
 
+    val onColor = MaterialTheme.colorScheme.primary
+    val offColor = MaterialTheme.colorScheme.surfaceVariant
     val trackColor by animateColorAsState(
-        targetValue = if (checked) Color(0xFF34C759) else Color(0xFFE9E9EA),
+        targetValue = if (checked) onColor else offColor,
         animationSpec = tween(durationMillis = animationDuration),
         label = "track_color_animation"
     )

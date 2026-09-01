@@ -23,6 +23,10 @@ interface HabitCompletionDao {
     @Query("SELECT * FROM habit_completions WHERE habitId = :habitId AND completionDate BETWEEN :startDate AND :endDate")
     suspend fun getCompletionsInPeriod(habitId: String, startDate: Long, endDate: Long): List<HabitCompletion>
 
+    // Все выполнения (по всем привычкам) за период — для карточки «Активность за неделю»
+    @Query("SELECT * FROM habit_completions WHERE completed = 1 AND completionDate BETWEEN :startDate AND :endDate")
+    suspend fun getCompletedInRange(startDate: Long, endDate: Long): List<HabitCompletion>
+
     @Query("SELECT * FROM habit_completions WHERE habitId = :habitId")
     suspend fun getAllCompletionsForHabit(habitId: String): List<HabitCompletion>
 

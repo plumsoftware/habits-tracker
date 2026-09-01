@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import ru.plumsoftware.habitstracker.ui.theme.Dimen
+import ru.plumsoftware.habitstracker.ui.theme.PillShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,7 +29,16 @@ fun TimeCard(
     initialMinute: Int? = null,
     time: String? = null,
     isClickable: Boolean,
-    onSelectedTime: (Int, Int) -> Unit
+    onSelectedTime: (Int, Int) -> Unit,
+    modifier: Modifier = Modifier.wrapContentSize(),
+    shape: androidx.compose.ui.graphics.Shape = PillShape,
+    containerColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primaryContainer,
+    contentColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onPrimaryContainer,
+    contentPadding: androidx.compose.foundation.layout.PaddingValues =
+        androidx.compose.foundation.layout.PaddingValues(
+            horizontal = Dimen.mediumPlus,
+            vertical = Dimen.smallPlus
+        )
 ) {
     var showTimePicker by remember { mutableStateOf(false) }
 
@@ -57,11 +67,11 @@ fun TimeCard(
     }
 
     Card(
-        modifier = Modifier
-            .wrapContentSize(),
+        modifier = modifier,
+        shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurface
+            containerColor = containerColor,
+            contentColor = contentColor
         ),
         elevation = CardDefaults.elevatedCardElevation(0.dp, 0.dp, 0.dp),
         onClick = {
@@ -72,8 +82,8 @@ fun TimeCard(
     ) {
         Text(
             text = selectedTime,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(horizontal = Dimen.medium, vertical = Dimen.smallPlus)
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(contentPadding)
         )
     }
 

@@ -7,15 +7,23 @@ import androidx.core.app.NotificationCompat
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.Data
+import kotlinx.coroutines.runBlocking
 import ru.plumsoftware.habitstracker.R
+import ru.plumsoftware.habitstracker.data.database.NotificationRepository
 import ru.plumsoftware.habitstracker.data.model.Habit
+import ru.plumsoftware.habitstracker.data.model.NotificationType
 import ru.plumsoftware.habitstracker.data.model.Periodicity
+import ru.plumsoftware.habitstracker.data.settings.SettingsRepository
 import ru.plumsoftware.habitstracker.ui.NotificationUtils
 import java.util.concurrent.TimeUnit
 import java.util.Calendar
 
 
-class HabitNotificationManager(private val context: Context) {
+class HabitNotificationManager(
+    private val context: Context,
+    private val notificationRepository: NotificationRepository,
+    private val settingsRepository: SettingsRepository
+) {
 
     companion object {
         const val CHANNEL_ID = "habit_reminders"
@@ -196,32 +204,51 @@ class HabitNotificationManager(private val context: Context) {
     }
 
     fun showNotification(habit: Habit) {
-        // Проверяем разрешение перед показом уведомления
+        // Проверяем системное разрешение перед показом уведомления
         if (!NotificationUtils.areNotificationsEnabled(context)) {
             return
         }
 
+        // Учитываем пользовательские настройки (push вкл/выкл, звук)
+        val settings = runBlocking { settingsRepository.current() }
+        if (!settings.pushEnabled) {
+            return
+        }
+
+        val title = habit.title
+        val body = "«${habit.title}» начнётся через ${habit.reminderInterval} мин."
+
         val notificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.icon)
-            .setContentTitle(habit.title)
-            .setContentText("${habit.title} - через ${habit.reminderInterval} минут")
+            .setContentTitle(title)
+            .setContentText(body)
             .setStyle(
                 NotificationCompat.BigTextStyle()
-                    .bigText(
-                        habit.body
-//                        "Время: ${habit.reminderTimeHour}:${habit.reminderTimeMinute.toString().padStart(2, '0')}"
-                    )
+                    .bigText(habit.body.ifEmpty { body })
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .build()
+
+        if (!settings.soundEnabled) {
+            builder.setSilent(true)
+        }
 
         notificationManager.notify(
             "${habit.id}_${System.currentTimeMillis()}".hashCode(),
-            notification
+            builder.build()
         )
+
+        // Сохраняем в БД, чтобы напоминание попало в список «Уведомления»
+        runBlocking {
+            notificationRepository.add(
+                title = "Пора: ${habit.title}",
+                body = body,
+                type = NotificationType.HABIT_REMINDER,
+                resourceUrl = ""
+            )
+        }
     }
 }

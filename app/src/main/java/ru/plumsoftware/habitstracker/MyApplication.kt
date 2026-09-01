@@ -10,9 +10,12 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 import org.koin.dsl.module
 import ru.plumsoftware.habitstracker.data.config.PlatformConfig
+import ru.plumsoftware.habitstracker.data.config.storePlatformConfig
 import ru.plumsoftware.habitstracker.data.database.AppStatsRepository
 import ru.plumsoftware.habitstracker.data.database.HabitDatabase
 import ru.plumsoftware.habitstracker.data.database.HabitRepository
+import ru.plumsoftware.habitstracker.data.database.NotificationRepository
+import ru.plumsoftware.habitstracker.data.settings.SettingsRepository
 import ru.plumsoftware.habitstracker.data.settings.ThemeRepository
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeViewModel
 import ru.plumsoftware.habitstracker.ui.screen.main.notifications.NotificationsViewModel
@@ -41,6 +44,8 @@ class MyApplication : Application() {
                     HomeViewModel.viewModelModule,
                     dataStoreModule,
                     ThemeRepository.themeRepositoryModule,
+                    SettingsRepository.settingsRepositoryModule,
+                    NotificationRepository.notificationRepositoryModule,
                     SettingsViewModel.settingsViewModelModule,
                     NotificationsViewModel.viewModelModule,
                     AppStatsRepository.appStatsModule
@@ -50,6 +55,8 @@ class MyApplication : Application() {
     }
 
     companion object {
-        val platformConfig: PlatformConfig = PlatformConfig.GooglePlayConfig()
+        // Площадку предоставляет активный флейвор (src/google|rustore|huawei) —
+        // в общем коде ничего менять не нужно, выбор только через Build Variant.
+        val platformConfig: PlatformConfig = storePlatformConfig
     }
 }

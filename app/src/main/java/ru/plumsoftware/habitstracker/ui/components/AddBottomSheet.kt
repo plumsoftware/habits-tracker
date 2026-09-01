@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -171,8 +172,8 @@ fun AddBottomSheet(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             ) {
                 if (title.isEmpty()) {
                     Text(
@@ -250,8 +251,8 @@ fun AddBottomSheet(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
             ) {
                 if (desc.isEmpty()) {
                     Text(
@@ -329,8 +330,8 @@ fun AddBottomSheet(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                     .clickable {
                         showDialog = true
                     }
@@ -357,68 +358,78 @@ fun AddBottomSheet(
             }
         }
 
-        // В AddBottomSheet, в Row с TimeCard и IntervalCard:
+        // Время и «Напомнить за» — две колонки с подписями над полями (как на макете)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(
-                space = Dimen.mediumPlus,
-                alignment = Alignment.Start
-            )
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(Dimen.mediumPlus)
         ) {
-            Row(
-                modifier = Modifier.wrapContentSize(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(
-                    space = Dimen.smallPlus,
-                    alignment = Alignment.Start
-                )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(Dimen.smallPlus),
+                horizontalAlignment = Alignment.Start
             ) {
                 Text(
                     text = "Время",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-
                 TimeCard(
                     initialHour = editingHabit?.reminderTimeHour,
                     initialMinute = editingHabit?.reminderTimeMinute,
                     isClickable = true,
                     onSelectedTime = { hour, minute ->
                         selectedTime = hour to minute
-                    }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    contentPadding = PaddingValues(
+                        horizontal = Dimen.large,
+                        vertical = Dimen.mediumPlus
+                    )
                 )
             }
 
-            Row(
-                modifier = Modifier.wrapContentSize(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(
-                    space = Dimen.smallPlus,
-                    alignment = Alignment.Start
-                )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(Dimen.smallPlus),
+                horizontalAlignment = Alignment.Start
             ) {
                 Text(
                     text = "Напомнить за",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-
                 IntervalCard(
                     initialInterval = editingHabit?.reminderInterval,
                     onSelectedTime = { interval ->
                         selectedInterval = interval
-                    }
+                    },
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
 
         // Кнопка сохранения/обновления
         Button(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = Dimen.medium, vertical = Dimen.mediumPlus),
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(
+                    elevation = 14.dp,
+                    shape = MaterialTheme.shapes.large,
+                    clip = false,
+                    ambientColor = MaterialTheme.colorScheme.primary,
+                    spotColor = MaterialTheme.colorScheme.primary
+                ),
+            shape = MaterialTheme.shapes.large,
+            contentPadding = PaddingValues(horizontal = Dimen.medium, vertical = Dimen.extraLarge),
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
             onClick = {
                 val habit = if (isEditMode) {
                     // Режим редактирования - обновляем существующую привычку
@@ -470,9 +481,10 @@ fun AddBottomSheet(
         if (isEditMode && onDeleteHabit != null) {
             OutlinedButton(
                 modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
                 contentPadding = PaddingValues(
                     horizontal = Dimen.medium,
-                    vertical = Dimen.mediumPlus
+                    vertical = Dimen.extraLarge
                 ),
                 colors = ButtonDefaults.outlinedButtonColors(
                     containerColor = Color.Transparent,

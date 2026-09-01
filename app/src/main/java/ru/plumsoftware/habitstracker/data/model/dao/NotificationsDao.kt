@@ -16,8 +16,18 @@ interface NotificationsDao {
     @Delete
     suspend fun delete(notification: Notification)
 
-    @Query(
-        "SELECT * FROM notifications"
-    )
+    @Query("SELECT * FROM notifications ORDER BY sendAt DESC")
     fun getAll(): Flow<List<Notification>>
+
+    @Query("UPDATE notifications SET isRead = 1 WHERE id = :id")
+    suspend fun markRead(id: Int)
+
+    @Query("UPDATE notifications SET isRead = 1")
+    suspend fun markAllRead()
+
+    @Query("DELETE FROM notifications")
+    suspend fun clearAll()
+
+    @Query("SELECT COUNT(*) FROM notifications WHERE isRead = 0")
+    fun unreadCount(): Flow<Int>
 }

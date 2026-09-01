@@ -21,12 +21,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import ru.plumsoftware.habitstracker.ui.screen.main.home.DailyStats
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeState
 import ru.plumsoftware.habitstracker.ui.screen.main.home.MonthlyStats
+import ru.plumsoftware.habitstracker.ui.screen.main.home.WeeklyStats
 import ru.plumsoftware.habitstracker.ui.theme.Dimen
 import ru.plumsoftware.habitstracker.ui.theme.LocalExtendedColorScheme
 import java.text.SimpleDateFormat
@@ -75,7 +77,7 @@ fun MonthlyStatsCard(
     Card(
         modifier = modifier,
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Column(
             modifier = Modifier
@@ -160,7 +162,7 @@ fun DailyStatsCard(
     Card(
         modifier = modifier,
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Column(
             modifier = Modifier
@@ -276,6 +278,83 @@ fun MonthlyProgressBar(
 }
 
 @Composable
+fun WeeklyActivityCard(
+    weeklyStats: WeeklyStats,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.large,
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(Dimen.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(Dimen.large)
+        ) {
+            Text(
+                text = "Активность за неделю",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            val maxValue = weeklyStats.days.maxOfOrNull { it.completedCount } ?: 0
+            val barColor = LocalExtendedColorScheme.current.graphBarColor.color
+            val accent = MaterialTheme.colorScheme.primary
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(Dimen.Size.chartBarMaxHeight + 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                weeklyStats.days.forEach { day ->
+                    val ratio = if (maxValue > 0) day.completedCount.toFloat() / maxValue else 0f
+                    // Минимальная видимая высота, чтобы «пустые» дни тоже читались
+                    val barHeight = (ratio * Dimen.Size.chartBarMaxHeight.value).dp
+                        .coerceAtLeast(6.dp)
+
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Bottom,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(Dimen.Size.chartBarWidth)
+                                .height(barHeight)
+                                .shadow(
+                                    elevation = 4.dp,
+                                    shape = RoundedCornerShape(8.dp),
+                                    clip = false,
+                                    ambientColor = accent,
+                                    spotColor = accent
+                                )
+                                .background(
+                                    color = if (day.isSelected) accent else barColor,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = day.dayOfMonth.toString(),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (day.isSelected) accent
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun MonthlyHistogram(
     dailyCompletions: Map<Int, Int>,
     modifier: Modifier = Modifier
@@ -316,11 +395,12 @@ fun MonthlyHistogram(
 
                     Box(
                         modifier = Modifier
-                            .width(4.dp)
-                            .height((heightRatio * 60).dp)
+                            .width(Dimen.Size.chartBarWidth)
+                            .height((heightRatio * Dimen.Size.chartBarMaxHeight.value).dp)
                             .background(
-                                color = MaterialTheme.colorScheme.primary,
-                                shape = RoundedCornerShape(2.dp)
+                                color = if (heightRatio >= 1f) MaterialTheme.colorScheme.primary
+                                else LocalExtendedColorScheme.current.graphBarColor.color,
+                                shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 8.dp)
                             )
                     )
 

@@ -42,21 +42,23 @@ import kotlin.math.abs
 fun CalendarView(
     selectedDate: Long,
     selectedDay: Int,
-    onDaySelected: (Int) -> Unit
+    onDaySelected: (Int) -> Unit,
+    dayProgress: Map<Long, Float> = emptyMap(),
+    firstDow: Int = Calendar.MONDAY
 ) {
     val listState = rememberLazyListState()
 
-    LaunchedEffect(selectedDate) {
+    LaunchedEffect(selectedDate, firstDow) {
         delay(1200)
 
         val cal = Calendar.getInstance().apply {
             timeInMillis = selectedDate
-            firstDayOfWeek = Calendar.MONDAY
+            firstDayOfWeek = firstDow
         }
 
         val firstDayOfMonth = cal.clone() as Calendar
         firstDayOfMonth.set(Calendar.DAY_OF_MONTH, 1)
-        val firstDisplayDay = getFirstDisplayDay(firstDayOfMonth)
+        val firstDisplayDay = getFirstDisplayDay(firstDayOfMonth, firstDow)
 
         val daysDiff = ((selectedDate - firstDisplayDay.timeInMillis) / (24 * 60 * 60 * 1000)).toInt()
         val weekIndex = daysDiff / 7
@@ -96,12 +98,12 @@ fun CalendarView(
                             val weekIndex = item.index
                             val cal = Calendar.getInstance().apply {
                                 timeInMillis = selectedDate
-                                firstDayOfWeek = Calendar.MONDAY
+                                firstDayOfWeek = firstDow
                             }
 
                             val firstDayOfMonth = cal.clone() as Calendar
                             firstDayOfMonth.set(Calendar.DAY_OF_MONTH, 1)
-                            val firstDisplayDay = getFirstDisplayDay(firstDayOfMonth)
+                            val firstDisplayDay = getFirstDisplayDay(firstDayOfMonth, firstDow)
 
                             val weekStartDay = weekIndex * 7
                             val relativeOffset = absoluteOffset - item.offset
@@ -125,18 +127,18 @@ fun CalendarView(
     ) {
         val cal = Calendar.getInstance().apply {
             timeInMillis = selectedDate
-            firstDayOfWeek = Calendar.MONDAY
+            firstDayOfWeek = firstDow
         }
 
         val dateFormat = SimpleDateFormat("EEE", Locale.getDefault())
         val firstDayOfMonth = (cal.clone() as Calendar).apply {
             set(Calendar.DAY_OF_MONTH, 1)
         }
-        val firstDisplayDay = getFirstDisplayDay(firstDayOfMonth)
+        val firstDisplayDay = getFirstDisplayDay(firstDayOfMonth, firstDow)
         val lastDayOfMonth = (cal.clone() as Calendar).apply {
             set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH))
         }
-        val lastDisplayDay = getLastDisplayDay(lastDayOfMonth)
+        val lastDisplayDay = getLastDisplayDay(lastDayOfMonth, firstDow)
         val totalDays = ((lastDisplayDay.timeInMillis - firstDisplayDay.timeInMillis) / (24 * 60 * 60 * 1000)).toInt() + 1
         val weeks = (0 until totalDays).chunked(7)
 
@@ -147,7 +149,8 @@ fun CalendarView(
                 dateFormat = dateFormat,
                 currentMonth = cal.get(Calendar.MONTH),
                 selectedDay = selectedDay,
-                onDaySelected = onDaySelected
+                onDaySelected = onDaySelected,
+                dayProgress = dayProgress
             )
         }
     }
@@ -160,7 +163,8 @@ fun WeekRow(
     dateFormat: SimpleDateFormat,
     currentMonth: Int,
     selectedDay: Int,
-    onDaySelected: (Int) -> Unit
+    onDaySelected: (Int) -> Unit,
+    dayProgress: Map<Long, Float> = emptyMap()
 ) {
     BoxWithConstraints(
         modifier = Modifier
@@ -185,11 +189,19 @@ fun WeekRow(
                     val isCurrentMonth = currentDay.get(Calendar.MONTH) == currentMonth
                     val isSelected = isCurrentMonth && dayNumber == selectedDay
 
+                    val startOfDay = (currentDay.clone() as Calendar).apply {
+                        set(Calendar.HOUR_OF_DAY, 0)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }.timeInMillis
+
                     DayItem(
                         day = dayNumber,
                         dayName = dayName,
                         isCurrentMonth = isCurrentMonth,
                         isSelected = isSelected,
+                        progress = dayProgress[startOfDay] ?: 0f,
                         onClick = {
                             if (isCurrentMonth) {
                                 onDaySelected(dayNumber)
@@ -248,18 +260,20 @@ private fun findTargetWeekIndex(listState: LazyListState): Int {
     return targetItem?.index ?: listState.firstVisibleItemIndex
 }
 
-private fun getFirstDisplayDay(firstDayOfMonth: Calendar): Calendar {
+private fun getFirstDisplayDay(firstDayOfMonth: Calendar, firstDow: Int): Calendar {
     val firstDisplayDay = firstDayOfMonth.clone() as Calendar
     val dayOfWeek = firstDayOfMonth.get(Calendar.DAY_OF_WEEK)
-    val daysToSubtract = (dayOfWeek - Calendar.MONDAY + 7) % 7
+    val daysToSubtract = (dayOfWeek - firstDow + 7) % 7
     firstDisplayDay.add(Calendar.DAY_OF_MONTH, -daysToSubtract)
     return firstDisplayDay
 }
 
-private fun getLastDisplayDay(lastDayOfMonth: Calendar): Calendar {
+private fun getLastDisplayDay(lastDayOfMonth: Calendar, firstDow: Int): Calendar {
     val lastDisplayDay = lastDayOfMonth.clone() as Calendar
     val dayOfWeek = lastDayOfMonth.get(Calendar.DAY_OF_WEEK)
-    val daysToAdd = (Calendar.SUNDAY - dayOfWeek + 7) % 7
+    // День недели последнего дня отображаемой недели (7-й от начала недели)
+    val lastDow = (firstDow + 5) % 7 + 1
+    val daysToAdd = (lastDow - dayOfWeek + 7) % 7
     lastDisplayDay.add(Calendar.DAY_OF_MONTH, daysToAdd)
     return lastDisplayDay
 }

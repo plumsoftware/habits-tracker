@@ -279,7 +279,11 @@ class HabitRepository(
     companion object {
         val repositoryModule = module {
             single<HabitNotificationManager> {
-                HabitNotificationManager(context = androidContext())
+                HabitNotificationManager(
+                    context = androidContext(),
+                    notificationRepository = get(),
+                    settingsRepository = get()
+                )
             }
 
             single<HabitRepository> {

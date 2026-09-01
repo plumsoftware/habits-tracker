@@ -19,4 +19,10 @@ class Converters {
             else -> Periodicity.DAILY
         }
     }
+
+    @TypeConverter
+    fun fromNotificationType(type: NotificationType): String = type.name
+
+    @TypeConverter
+    fun toNotificationType(value: String?): NotificationType = NotificationType.fromName(value)
 }

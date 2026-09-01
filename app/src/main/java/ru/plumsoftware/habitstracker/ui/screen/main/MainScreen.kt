@@ -21,7 +21,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,7 +30,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.shadow
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -45,6 +48,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarMonth
 import com.yandex.mobile.ads.appopenad.AppOpenAd
 import com.yandex.mobile.ads.appopenad.AppOpenAdEventListener
 import com.yandex.mobile.ads.appopenad.AppOpenAdLoadListener
@@ -61,10 +66,12 @@ import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
 import ru.plumsoftware.habitstracker.ui.components.AddBottomSheet
 import ru.plumsoftware.habitstracker.ui.components.BottomBar
+import ru.plumsoftware.habitstracker.ui.components.CalendarPickerDialog
 import ru.plumsoftware.habitstracker.ui.components.CalendarView
 import ru.plumsoftware.habitstracker.ui.components.DailyStatsCard
 import ru.plumsoftware.habitstracker.ui.components.HabitCard
 import ru.plumsoftware.habitstracker.ui.components.MonthlyStatsCard
+import ru.plumsoftware.habitstracker.ui.components.WeeklyActivityCard
 import ru.plumsoftware.habitstracker.ui.components.StatisticsSection
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeEvent
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeState
@@ -76,6 +83,7 @@ import ru.plumsoftware.habitstracker.ui.theme.Dimen
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,11 +116,12 @@ fun HomeScreen(
     val activity = LocalActivity.current
     val context = LocalContext.current
 
-    // Автоматическая прокрутка при изменении списка привычек
-    LaunchedEffect(state.habitsWithStatus, nearestHabitIndex) {
+    // Автопрокрутка к ближайшей привычке — только при смене даты/состава списка,
+    // но НЕ при отметке выполнения (иначе список «дёргается»)
+    LaunchedEffect(state.selectedDate, nearestHabitIndex) {
         if (nearestHabitIndex != -1 && state.habitsWithStatus.isNotEmpty()) {
             // Небольшая задержка для плавности
-            delay(300L)
+            delay(300L.milliseconds)
             listState.animateScrollToItem(
                 index = nearestHabitIndex,
                 scrollOffset = 0
@@ -138,42 +147,15 @@ fun HomeScreen(
     }
 
     if (showDatePicker) {
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val selectedDate = datePickerState.selectedDateMillis
-                        if (selectedDate != null) {
-                            viewModel.onEvent(HomeEvent.SelectDate(selectedDate))
-                        }
-                        showDatePicker = false
-                    }
-                ) {
-                    Text(
-                        text = "Ок",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+        CalendarPickerDialog(
+            initialDateMillis = if (state.selectedDate > 0L) state.selectedDate else System.currentTimeMillis(),
+            onConfirm = { millis ->
+                viewModel.onEvent(HomeEvent.SelectDate(millis))
+                showDatePicker = false
             },
-            dismissButton = {
-                TextButton(
-                    onClick = { showDatePicker = false }
-                ) {
-                    Text(
-                        text = "Отмена",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-            }
-        ) {
-            DatePicker(
-                modifier = Modifier.padding(vertical = Dimen.medium),
-                state = datePickerState, // Используем запомненное состояние
-                showModeToggle = false,
-                title = null
-            )
-        }
+            onDismiss = { showDatePicker = false },
+            firstDow = state.firstDayOfWeek
+        )
     }
 
     Scaffold(
@@ -183,7 +165,7 @@ fun HomeScreen(
                 MainScreenStates.Home -> {}
                 MainScreenStates.Notifications -> {}
                 MainScreenStates.Settings -> {
-                    CenterAlignedTopAppBar(
+                    TopAppBar(
                         title = {
                             Text(
                                 text = "Настройки",
@@ -261,7 +243,8 @@ fun HomeScreen(
                             ) {
                                 Icon(
                                     modifier = Modifier.align(Alignment.Center),
-                                    painter = painterResource(R.drawable.calendar_filled),
+                                    imageVector = Icons.Outlined.CalendarMonth,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     contentDescription = "Выбрать дату"
                                 )
                             }
@@ -277,7 +260,9 @@ fun HomeScreen(
                         selectedDay = state.selectedDay,
                         onDaySelected = { day ->
                             viewModel.onEvent(HomeEvent.SelectDay(day))
-                        }
+                        },
+                        dayProgress = state.dayProgress,
+                        firstDow = state.firstDayOfWeek
                     )
 
                     Spacer(
@@ -293,8 +278,12 @@ fun HomeScreen(
                         ),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        itemsIndexed(state.habitsWithStatus) { index, item ->
+                        itemsIndexed(
+                            state.habitsWithStatus,
+                            key = { _, item -> item.habit.id }
+                        ) { index, item ->
                             HabitCard(
+                                modifier = Modifier.animateItem(),
                                 habitWithStatus = item,
                                 onClick = { habit ->
                                     viewModel.onEvent(HomeEvent.OpenEditHabit(habit))
@@ -376,7 +365,8 @@ fun HomeScreen(
                                 Box(modifier = Modifier.fillMaxSize()) {
                                     Icon(
                                         modifier = Modifier.align(Alignment.Center),
-                                        painter = painterResource(R.drawable.calendar_filled),
+                                        imageVector = Icons.Outlined.CalendarMonth,
+                                        tint = MaterialTheme.colorScheme.primary,
                                         contentDescription = "Выбрать дату"
                                     )
                                 }
@@ -396,7 +386,9 @@ fun HomeScreen(
                             selectedDay = state.selectedDay,
                             onDaySelected = { day ->
                                 viewModel.onEvent(HomeEvent.SelectDay(day))
-                            }
+                            },
+                            dayProgress = state.dayProgress,
+                            firstDow = state.firstDayOfWeek
                         )
                     }
 
@@ -410,6 +402,19 @@ fun HomeScreen(
                         MonthlyStatsCard(
                             monthlyStats = state.monthlyStats,
                             selectedMonth = state.selectedMonth,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    // Spacer
+                    item {
+                        Spacer(modifier = Modifier.height(Dimen.large))
+                    }
+
+                    // Активность за неделю
+                    item {
+                        WeeklyActivityCard(
+                            weeklyStats = state.weeklyStats,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -435,7 +440,7 @@ fun HomeScreen(
             ModalBottomSheet(
                 onDismissRequest = { showBottomSheet = false },
                 sheetState = sheetState,
-                containerColor = MaterialTheme.colorScheme.surface
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
             ) {
                 AddBottomSheet(
                     onSaveHabit = { habit ->

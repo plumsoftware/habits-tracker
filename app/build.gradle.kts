@@ -17,10 +17,18 @@ android {
         applicationId = "ru.plumsoftware.habitstracker"
         minSdk = 24
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0.3"
+        versionCode = 4
+        versionName = "1.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // Флейворы по магазинам приложений. Активная площадка выбирается через BuildConfig.STORE.
+    flavorDimensions += "store"
+    productFlavors {
+        create("google") { dimension = "store" }
+        create("rustore") { dimension = "store" }
+        create("huawei") { dimension = "store" }
     }
 
     buildTypes {
@@ -54,6 +62,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // Glance — виджеты на Compose
+    implementation("androidx.glance:glance-appwidget:1.1.1")
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.animation)
     implementation(libs.firebase.messaging)

@@ -18,5 +18,10 @@ data class HomeState(
     val editingHabit: Habit? = null,
     val monthlyStats: MonthlyStats = MonthlyStats(),
     val dailyStats: DailyStats = DailyStats(),
+    val weeklyStats: WeeklyStats = WeeklyStats(),
+    // Доля выполненных привычек по дням (начало дня в ms -> 0..1) — для полосок в календаре
+    val dayProgress: Map<Long, Float> = emptyMap(),
+    // Начало недели из настроек (Calendar.MONDAY / Calendar.SUNDAY)
+    val firstDayOfWeek: Int = java.util.Calendar.MONDAY,
     val showOpenAds: Boolean = false
 )

@@ -10,5 +10,7 @@ data class Notification(
     val title: String,
     val body: String,
     val sendAt: Long,
-    val resourceUrl: String
+    val resourceUrl: String,
+    val type: NotificationType = NotificationType.GENERAL,
+    val isRead: Boolean = false
 )
