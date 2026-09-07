@@ -25,6 +25,14 @@ import ru.plumsoftware.habitstracker.ui.theme.AppTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Телефон — только портрет; планшет/большой экран — автоповорот разрешён
+        requestedOrientation = if (resources.getBoolean(R.bool.is_tablet)) {
+            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        } else {
+            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+
         enableEdgeToEdge()
         setContent {
             // Запрос разрешений на хранилище (и уведомления) при запуске

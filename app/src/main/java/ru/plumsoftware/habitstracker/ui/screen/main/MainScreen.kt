@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,6 +19,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -42,6 +49,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +57,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.outlined.CalendarMonth
 import com.yandex.mobile.ads.appopenad.AppOpenAd
 import com.yandex.mobile.ads.appopenad.AppOpenAdEventListener
@@ -64,12 +74,15 @@ import ru.plumsoftware.habitstracker.MyApplication
 import ru.plumsoftware.habitstracker.R
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
+import ru.plumsoftware.habitstracker.ui.components.AchievementsCard
+import ru.plumsoftware.habitstracker.ui.components.ActivityHeatmapCard
 import ru.plumsoftware.habitstracker.ui.components.AddBottomSheet
 import ru.plumsoftware.habitstracker.ui.components.BottomBar
 import ru.plumsoftware.habitstracker.ui.components.CalendarPickerDialog
 import ru.plumsoftware.habitstracker.ui.components.CalendarView
 import ru.plumsoftware.habitstracker.ui.components.DailyStatsCard
 import ru.plumsoftware.habitstracker.ui.components.HabitCard
+import ru.plumsoftware.habitstracker.ui.components.HabitCorrelationsCard
 import ru.plumsoftware.habitstracker.ui.components.MonthlyStatsCard
 import ru.plumsoftware.habitstracker.ui.components.WeeklyActivityCard
 import ru.plumsoftware.habitstracker.ui.components.StatisticsSection
@@ -105,6 +118,10 @@ fun HomeScreen(
 
     //Автопрокрутка до ближайшей привычки
     val listState = rememberLazyListState()
+    // Состояние сетки привычек (используется и для 1, и для 2 колонок)
+    val habitsGridState = rememberLazyGridState()
+    // Режим отображения списка привычек: false — одна колонка (строкой), true — две колонки
+    var isHabitsGrid by rememberSaveable { mutableStateOf(false) }
 
     val isEditMode = state.editingHabit != null
 
@@ -118,11 +135,11 @@ fun HomeScreen(
 
     // Автопрокрутка к ближайшей привычке — только при смене даты/состава списка,
     // но НЕ при отметке выполнения (иначе список «дёргается»)
-    LaunchedEffect(state.selectedDate, nearestHabitIndex) {
-        if (nearestHabitIndex != -1 && state.habitsWithStatus.isNotEmpty()) {
-            // Небольшая задержка для плавности
+    LaunchedEffect(state.selectedDate, nearestHabitIndex, isHabitsGrid) {
+        if (nearestHabitIndex != -1 && state.habitsWithStatus.isNotEmpty() && !isHabitsGrid) {
+            // Небольшая задержка для плавности; автоскролл только в режиме одной колонки
             delay(300L.milliseconds)
-            listState.animateScrollToItem(
+            habitsGridState.animateScrollToItem(
                 index = nearestHabitIndex,
                 scrollOffset = 0
             )
@@ -158,8 +175,42 @@ fun HomeScreen(
         )
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // Планшет/большой экран в альбомной ориентации → трёхколоночная вёрстка
+        val isExpanded = maxWidth >= 840.dp
+
+        if (isExpanded) {
+            ExpandedLayout(
+                state = state,
+                isDark = isDarkTheme,
+                isGrid = isHabitsGrid,
+                gridState = habitsGridState,
+                statsListState = listState,
+                onNavigate = { target -> viewModel.onEvent(navEventFor(target)) },
+                onToggleGrid = { isHabitsGrid = !isHabitsGrid },
+                onOpenCalendar = { showDatePicker = true },
+                onSelectDate = { millis -> viewModel.onEvent(HomeEvent.SelectDate(millis)) },
+                onHabitClick = { habit ->
+                    viewModel.onEvent(HomeEvent.OpenEditHabit(habit))
+                    showBottomSheet = true
+                },
+                onToggleDone = { habitId, done ->
+                    if (done) viewModel.onEvent(HomeEvent.MarkHabitCompleted(habitId))
+                    else viewModel.onEvent(HomeEvent.UnmarkHabitCompleted(habitId))
+                },
+                onAddHabit = { showBottomSheet = true },
+                settingsContent = { pad ->
+                    SettingsScreen(
+                        padding = pad,
+                        settingsViewModel = settingsViewModel,
+                        isDark = isDarkTheme
+                    )
+                },
+                notificationsContent = { NotificationScreen(embedded = true) }
+            )
+        } else {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
         topBar = {
             when (state.mainScreenState) {
                 MainScreenStates.Home -> {}
@@ -190,116 +241,27 @@ fun HomeScreen(
 
         when (state.mainScreenState) {
             MainScreenStates.Home -> {
-                Column(
+                HomeCenterContent(
+                    state = state,
+                    gridState = habitsGridState,
+                    isGrid = isHabitsGrid,
+                    onToggleGrid = { isHabitsGrid = !isHabitsGrid },
+                    onOpenCalendar = { showDatePicker = true },
+                    onSelectDate = { millis -> viewModel.onEvent(HomeEvent.SelectDate(millis)) },
+                    onHabitClick = { habit ->
+                        viewModel.onEvent(HomeEvent.OpenEditHabit(habit))
+                        showBottomSheet = true
+                    },
+                    onToggleDone = { habitId, done ->
+                        if (done) viewModel.onEvent(HomeEvent.MarkHabitCompleted(habitId))
+                        else viewModel.onEvent(HomeEvent.UnmarkHabitCompleted(habitId))
+                    },
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
                         .padding(horizontal = Dimen.medium)
-                        .padding(top = Dimen.large),
-                    verticalArrangement = Arrangement.spacedBy(
-                        space = Dimen.medium,
-                        alignment = Alignment.Top
-                    ),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Top,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .wrapContentSize(),
-                            verticalArrangement = Arrangement.spacedBy(
-                                space = Dimen.medium,
-                                alignment = Alignment.Top
-                            ),
-                            horizontalAlignment = Alignment.Start
-                        ) {
-                            Text(
-                                text = getMonthTitle(state.selectedDate),
-                                style = MaterialTheme.typography.titleLarge
-                            )
-
-                            Text(
-                                text = "Привычки на сегодня: ${state.allHabitsSize}",
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                        }
-
-                        Card(
-                            modifier = Modifier.size(44.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer
-                            ),
-                            elevation = CardDefaults.elevatedCardElevation(0.dp, 0.dp, 0.dp),
-                            shape = CircleShape,
-                            onClick = {
-                                showDatePicker = true
-                            }
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Icon(
-                                    modifier = Modifier.align(Alignment.Center),
-                                    imageVector = Icons.Outlined.CalendarMonth,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    contentDescription = "Выбрать дату"
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(
-                        modifier = Modifier.height(Dimen.medium)
-                    )
-
-                    CalendarView(
-                        selectedDate = state.selectedDate,
-                        selectedDay = state.selectedDay,
-                        onDaySelected = { day ->
-                            viewModel.onEvent(HomeEvent.SelectDay(day))
-                        },
-                        dayProgress = state.dayProgress,
-                        firstDow = state.firstDayOfWeek
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(Dimen.large)
-                    )
-
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(
-                            space = Dimen.medium,
-                            alignment = Alignment.CenterVertically
-                        ),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        itemsIndexed(
-                            state.habitsWithStatus,
-                            key = { _, item -> item.habit.id }
-                        ) { index, item ->
-                            HabitCard(
-                                modifier = Modifier.animateItem(),
-                                habitWithStatus = item,
-                                onClick = { habit ->
-                                    viewModel.onEvent(HomeEvent.OpenEditHabit(habit))
-                                    showBottomSheet = true
-                                },
-                                onDone = { isDone ->
-                                    if (isDone) {
-                                        viewModel.onEvent(HomeEvent.MarkHabitCompleted(item.habit.id))
-                                    } else {
-                                        viewModel.onEvent(HomeEvent.UnmarkHabitCompleted(item.habit.id))
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
+                        .padding(top = Dimen.large)
+                )
             }
 
             MainScreenStates.Notifications -> {
@@ -383,9 +345,8 @@ fun HomeScreen(
                     item {
                         CalendarView(
                             selectedDate = state.selectedDate,
-                            selectedDay = state.selectedDay,
-                            onDaySelected = { day ->
-                                viewModel.onEvent(HomeEvent.SelectDay(day))
+                            onDateSelected = { millis ->
+                                viewModel.onEvent(HomeEvent.SelectDate(millis))
                             },
                             dayProgress = state.dayProgress,
                             firstDow = state.firstDayOfWeek
@@ -397,7 +358,46 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.height(Dimen.large))
                     }
 
-                    // Статистика - месячная
+                    // Статистика - дневная (привязана к выбранному в календаре дню)
+                    item {
+                        DailyStatsCard(
+                            dailyStats = state.dailyStats,
+                            selectedDate = state.selectedDate,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(Dimen.large))
+                    }
+
+                    // 1. Тепловая карта активности
+                    item {
+                        ActivityHeatmapCard(
+                            heatmap = state.heatmap,
+                            endDate = state.selectedDate,
+                            firstDayOfWeek = state.firstDayOfWeek,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(Dimen.large))
+                    }
+
+                    // 2. Активность за неделю
+                    item {
+                        WeeklyActivityCard(
+                            weeklyStats = state.weeklyStats,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(Dimen.large))
+                    }
+
+                    // 3. Статистика за месяц
                     item {
                         MonthlyStatsCard(
                             monthlyStats = state.monthlyStats,
@@ -406,62 +406,220 @@ fun HomeScreen(
                         )
                     }
 
-                    // Spacer
                     item {
                         Spacer(modifier = Modifier.height(Dimen.large))
                     }
 
-                    // Активность за неделю
+                    // 4. Достижения
                     item {
-                        WeeklyActivityCard(
-                            weeklyStats = state.weeklyStats,
+                        AchievementsCard(
+                            overallStreak = state.overallStreak,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
 
-                    // Spacer
                     item {
                         Spacer(modifier = Modifier.height(Dimen.large))
                     }
 
-                    // Статистика - дневная
+                    // 5. Связи между привычками (закономерности)
                     item {
-                        DailyStatsCard(
-                            dailyStats = state.dailyStats,
-                            selectedDate = state.selectedDate,
+                        HabitCorrelationsCard(
+                            correlations = state.correlations,
+                            unlocked = state.patternsUnlocked,
                             modifier = Modifier.fillMaxWidth()
                         )
+                    }
+
+                    // Нижний отступ
+                    item {
+                        Spacer(modifier = Modifier.height(Dimen.extraLarge))
                     }
                 }
             }
         }
+            }
+        }
+    }
 
-        if (showBottomSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showBottomSheet = false },
-                sheetState = sheetState,
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-            ) {
-                AddBottomSheet(
-                    onSaveHabit = { habit ->
-                        viewModel.onEvent(HomeEvent.AddHabit(habit = habit))
-                        showBottomSheet = false
-                    },
-                    onUpdateHabit = { habit ->
-                        viewModel.onEvent(HomeEvent.UpdateHabit(habit))
-                        showBottomSheet = false
-                    },
-                    onDeleteHabit = if (isEditMode) {
-                        {
-                            state.editingHabit?.let { habit ->
-                                viewModel.onEvent(HomeEvent.DeleteHabitById(habit.id))
-                            }
-                            showBottomSheet = false
+    // Лист создания/редактирования привычки — общий для обеих вёрсток
+    if (showBottomSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showBottomSheet = false },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+        ) {
+            AddBottomSheet(
+                onSaveHabit = { habit ->
+                    viewModel.onEvent(HomeEvent.AddHabit(habit = habit))
+                    showBottomSheet = false
+                },
+                onUpdateHabit = { habit ->
+                    viewModel.onEvent(HomeEvent.UpdateHabit(habit))
+                    showBottomSheet = false
+                },
+                onDeleteHabit = if (isEditMode) {
+                    {
+                        state.editingHabit?.let { habit ->
+                            viewModel.onEvent(HomeEvent.DeleteHabitById(habit.id))
                         }
-                    } else null,
-                    editingHabit = state.editingHabit
+                        showBottomSheet = false
+                    }
+                } else null,
+                editingHabit = state.editingHabit,
+                categories = state.categories,
+                onCreateCategory = { name, color ->
+                    viewModel.onEvent(HomeEvent.CreateCategory(name, color))
+                },
+                onUpdateCategory = { category ->
+                    viewModel.onEvent(HomeEvent.UpdateCategory(category))
+                },
+                onDeleteCategory = { category ->
+                    viewModel.onEvent(HomeEvent.DeleteCategory(category))
+                }
+            )
+        }
+    }
+}
+
+/** Событие навигации по разделам для планшетного рельса. */
+private fun navEventFor(target: MainScreenStates): HomeEvent = when (target) {
+    MainScreenStates.Home -> HomeEvent.OnHome
+    MainScreenStates.Statistics -> HomeEvent.OnStatistic
+    MainScreenStates.Notifications -> HomeEvent.OnNotifications
+    MainScreenStates.Settings -> HomeEvent.OnSettings
+}
+
+/**
+ * Центральный контент главного экрана: заголовок с кнопками (переключение колонок + календарь),
+ * недельный календарь и сетка привычек (1 или 2 колонки). Переиспользуется в телефонной
+ * и планшетной вёрстке.
+ */
+@Composable
+fun HomeCenterContent(
+    state: HomeState,
+    gridState: LazyGridState,
+    isGrid: Boolean,
+    onToggleGrid: () -> Unit,
+    onOpenCalendar: () -> Unit,
+    onSelectDate: (Long) -> Unit,
+    onHabitClick: (Habit) -> Unit,
+    onToggleDone: (habitId: String, done: Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(Dimen.medium, Alignment.Top),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(
+                modifier = Modifier.wrapContentSize(),
+                verticalArrangement = Arrangement.spacedBy(Dimen.medium, Alignment.Top),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(
+                    text = getMonthTitle(state.selectedDate),
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Text(
+                    text = "Привычки на сегодня: ${state.allHabitsSize}",
+                    style = MaterialTheme.typography.titleMedium
                 )
             }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(Dimen.smallPlus)) {
+                // Переключение отображения списка: 1 колонка / 2 колонки
+                RoundIconCard(
+                    imageVector = if (isGrid) Icons.Filled.ViewAgenda else Icons.Filled.GridView,
+                    contentDescription = if (isGrid) "В одну колонку" else "В две колонки",
+                    onClick = onToggleGrid
+                )
+                // Выбор даты
+                RoundIconCard(
+                    imageVector = Icons.Outlined.CalendarMonth,
+                    contentDescription = "Выбрать дату",
+                    onClick = onOpenCalendar
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(Dimen.medium))
+
+        CalendarView(
+            selectedDate = state.selectedDate,
+            onDateSelected = onSelectDate,
+            dayProgress = state.dayProgress,
+            firstDow = state.firstDayOfWeek
+        )
+
+        Spacer(modifier = Modifier.height(Dimen.large))
+
+        // Привычки отсортированы по времени выполнения — от ранней к поздней
+        val sortedHabits = remember(state.habitsWithStatus) {
+            state.habitsWithStatus.sortedWith(
+                compareBy(
+                    { it.habit.reminderTimeHour },
+                    { it.habit.reminderTimeMinute }
+                )
+            )
+        }
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(if (isGrid) 2 else 1),
+            state = gridState,
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(Dimen.medium),
+            verticalArrangement = Arrangement.spacedBy(Dimen.medium)
+        ) {
+            items(
+                sortedHabits,
+                key = { item -> item.habit.id }
+            ) { item ->
+                HabitCard(
+                    modifier = Modifier.animateItem(),
+                    habitWithStatus = item,
+                    category = state.categories.firstOrNull { it.id == item.habit.categoryId },
+                    streak = state.habitStreaks[item.habit.id] ?: 0,
+                    onClick = onHabitClick,
+                    onDone = { done -> onToggleDone(item.habit.id, done) }
+                )
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Spacer(modifier = Modifier.height(Dimen.extraLarge))
+            }
+        }
+    }
+}
+
+/** Круглая карточка-кнопка 44dp в стиле кнопки календаря. */
+@Composable
+fun RoundIconCard(
+    imageVector: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.size(44.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
+        elevation = CardDefaults.elevatedCardElevation(0.dp, 0.dp, 0.dp),
+        shape = CircleShape,
+        onClick = onClick
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Icon(
+                modifier = Modifier.align(Alignment.Center),
+                imageVector = imageVector,
+                tint = MaterialTheme.colorScheme.primary,
+                contentDescription = contentDescription
+            )
         }
     }
 }

@@ -80,9 +80,14 @@ object WidgetDataLoader {
 
     /** Перерисовать все экземпляры обоих виджетов (например, после изменений в приложении). */
     suspend fun refreshAll(context: Context) {
+        val appContext = context.applicationContext
+        // Каждый виджет обновляем независимо, чтобы сбой одного не мешал другому
         try {
-            TodayProgressWidget().updateAll(context)
-            HabitsListWidget().updateAll(context)
+            TodayProgressWidget().updateAll(appContext)
+        } catch (_: Exception) {
+        }
+        try {
+            HabitsListWidget().updateAll(appContext)
         } catch (_: Exception) {
         }
     }

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Телефон: автоповорот запрещён (только портрет) -->
+    <bool name="is_tablet">false</bool>
+</resources>

@@ -1,5 +1,6 @@
 package ru.plumsoftware.habitstracker.ui.screen.main.home
 
+import ru.plumsoftware.habitstracker.data.model.Category
 import ru.plumsoftware.habitstracker.data.model.Habit
 
 sealed interface HomeEvent {
@@ -21,4 +22,9 @@ sealed interface HomeEvent {
     data class OpenEditHabit(val habit: Habit) : HomeEvent
     object CloseEditBottomSheet : HomeEvent
     data class DeleteHabitById(val habitId: String) : HomeEvent
+
+    // Категории
+    data class CreateCategory(val name: String, val colorArgb: Long) : HomeEvent
+    data class UpdateCategory(val category: Category) : HomeEvent
+    data class DeleteCategory(val category: Category) : HomeEvent
 }

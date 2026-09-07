@@ -11,8 +11,10 @@ import kotlinx.coroutines.launch
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 import ru.plumsoftware.habitstracker.data.database.AppStatsRepository
+import ru.plumsoftware.habitstracker.data.database.CategoryRepository
 import ru.plumsoftware.habitstracker.data.database.HabitRepository
 import ru.plumsoftware.habitstracker.data.database.NotificationRepository
+import ru.plumsoftware.habitstracker.data.model.Category
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
 import ru.plumsoftware.habitstracker.data.model.NotificationType
@@ -25,7 +27,8 @@ class HomeViewModel(
     private val repository: HabitRepository,
     private val appStatsRepository: AppStatsRepository,
     private val notificationRepository: NotificationRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val categoryRepository: CategoryRepository
 ) : ViewModel() {
     private val _state = MutableStateFlow(HomeState())
     val state: StateFlow<HomeState> = _state
@@ -36,6 +39,16 @@ class HomeViewModel(
 
         recordAppLaunch()
         observeWeekStart()
+        observeCategories()
+    }
+
+    // Держим список категорий в состоянии актуальным
+    private fun observeCategories() {
+        viewModelScope.launch {
+            categoryRepository.getAll().collect { categories ->
+                _state.update { it.copy(categories = categories) }
+            }
+        }
     }
 
     // Реагируем на смену «Начала недели» в настройках без перезагрузки экрана
@@ -72,6 +85,16 @@ class HomeViewModel(
             is HomeEvent.OpenEditHabit -> openEditHabit(event.habit)
             HomeEvent.CloseEditBottomSheet -> closeEditBottomSheet()
             is HomeEvent.DeleteHabitById -> deleteHabitById(event.habitId)
+
+            is HomeEvent.CreateCategory -> viewModelScope.launch {
+                categoryRepository.create(event.name, event.colorArgb)
+            }
+            is HomeEvent.UpdateCategory -> viewModelScope.launch {
+                categoryRepository.update(event.category)
+            }
+            is HomeEvent.DeleteCategory -> viewModelScope.launch {
+                categoryRepository.delete(event.category)
+            }
         }
     }
 
@@ -303,6 +326,97 @@ class HomeViewModel(
         }
     }
 
+    /** Серия подряд выполненных дней для каждой привычки, заканчивающаяся [endDate]. */
+    private suspend fun computeHabitStreaks(
+        habits: List<HabitWithStatus>,
+        endDate: Long
+    ): Map<String, Int> {
+        val result = mutableMapOf<String, Int>()
+        val dayMs = 24 * 60 * 60 * 1000L
+        val end = startOfDayMillis(endDate)
+        for (hs in habits) {
+            val completions = repository.habitCompletionDao.getAllCompletionsForHabit(hs.habit.id)
+            val days = completions.filter { it.completed }
+                .map { startOfDayMillis(it.completionDate) }
+                .toSet()
+            var cursor = end
+            var streak = 0
+            while (days.contains(cursor)) {
+                streak++
+                cursor -= dayMs
+            }
+            result[hs.habit.id] = streak
+        }
+        return result
+    }
+
+    /** Общая серия дней активности: подряд идущие дни с ≥1 выполнением, заканчивая [endDate]. */
+    private suspend fun computeOverallStreak(endDate: Long): Int {
+        val dayMs = 24 * 60 * 60 * 1000L
+        val end = startOfDayMillis(endDate)
+        val start = end - 366 * dayMs
+        val completions = repository.habitCompletionDao.getCompletedInRange(start, end + dayMs - 1)
+        val activeDays = completions.map { startOfDayMillis(it.completionDate) }.toSet()
+        var cursor = end
+        var streak = 0
+        while (activeDays.contains(cursor)) {
+            streak++
+            cursor -= dayMs
+        }
+        return streak
+    }
+
+    /** Тепловая карта: число выполнений по дням за последние 20 недель, заканчивая [endDate]. */
+    private suspend fun loadHeatmap(endDate: Long): Map<Long, Int> {
+        val dayMs = 24 * 60 * 60 * 1000L
+        val end = startOfDayMillis(endDate)
+        val start = end - (20 * 7 - 1) * dayMs
+        val completions = repository.habitCompletionDao.getCompletedInRange(start, end + dayMs - 1)
+        return completions.groupingBy { startOfDayMillis(it.completionDate) }.eachCount()
+    }
+
+    /** Топ связей между привычками: доля дней выполнения A, в которые также выполнена B. */
+    private suspend fun computeCorrelations(): List<HabitCorrelation> {
+        val habits = repository.getAllHabits().first()
+        if (habits.size < 2) return emptyList()
+        val limited = habits.take(8)
+        val daysByHabit = mutableMapOf<String, Set<Long>>()
+        for (h in limited) {
+            val comps = repository.habitCompletionDao.getAllCompletionsForHabit(h.id)
+            daysByHabit[h.id] = comps.filter { it.completed }
+                .map { startOfDayMillis(it.completionDate) }
+                .toSet()
+        }
+        val result = mutableListOf<HabitCorrelation>()
+        for (a in limited) {
+            val aDays = daysByHabit[a.id] ?: emptySet()
+            if (aDays.size < 3) continue
+            for (b in limited) {
+                if (a.id == b.id) continue
+                val bDays = daysByHabit[b.id] ?: emptySet()
+                val both = aDays.count { bDays.contains(it) }
+                val rate = both.toFloat() / aDays.size
+                if (rate > 0f) {
+                    result.add(HabitCorrelation(a.title.trim(), b.title.trim(), rate))
+                }
+            }
+        }
+        return result.sortedByDescending { it.rate }.take(3)
+    }
+
+    /** Закономерности доступны после недели пользования приложением. */
+    private fun isPatternsUnlocked(): Boolean {
+        return try {
+            val context = org.koin.core.context.GlobalContext.get().get<android.content.Context>()
+            val firstInstall = context.packageManager
+                .getPackageInfo(context.packageName, 0).firstInstallTime
+            val weekMs = 7 * 24 * 60 * 60 * 1000L
+            System.currentTimeMillis() - firstInstall >= weekMs
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     private fun unmarkHabitCompleted(habitId: String) {
         Log.d("HomeViewModel", "Снимаем отметку выполнения с привычки: $habitId")
         viewModelScope.launch {
@@ -485,6 +599,13 @@ class HomeViewModel(
                         else -> Calendar.MONDAY
                     }
 
+                    // Серии, тепловая карта и закономерности
+                    val habitStreaks = computeHabitStreaks(sortedHabits, date)
+                    val overallStreak = computeOverallStreak(date)
+                    val heatmap = loadHeatmap(date)
+                    val correlations = computeCorrelations()
+                    val patternsUnlocked = isPatternsUnlocked()
+
                     if (isFirstTime) {
                         _state.update {
                             it.copy(
@@ -495,7 +616,12 @@ class HomeViewModel(
                                 monthlyStats = monthlyStats,
                                 weeklyStats = weeklyStats,
                                 dayProgress = dayProgress,
-                                firstDayOfWeek = firstDayOfWeek
+                                firstDayOfWeek = firstDayOfWeek,
+                                habitStreaks = habitStreaks,
+                                overallStreak = overallStreak,
+                                heatmap = heatmap,
+                                correlations = correlations,
+                                patternsUnlocked = patternsUnlocked
                             )
                         }
                     } else {
@@ -507,7 +633,12 @@ class HomeViewModel(
                                 monthlyStats = monthlyStats,
                                 weeklyStats = weeklyStats,
                                 dayProgress = dayProgress,
-                                firstDayOfWeek = firstDayOfWeek
+                                firstDayOfWeek = firstDayOfWeek,
+                                habitStreaks = habitStreaks,
+                                overallStreak = overallStreak,
+                                heatmap = heatmap,
+                                correlations = correlations,
+                                patternsUnlocked = patternsUnlocked
                             )
                         }
                     }
@@ -771,6 +902,7 @@ class HomeViewModel(
         val viewModelModule = module {
             viewModel {
                 HomeViewModel(
+                    get(),
                     get(),
                     get(),
                     get(),

@@ -17,8 +17,8 @@ import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
-import androidx.glance.appwidget.updateAll
 import androidx.glance.background
+import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -53,16 +53,16 @@ class HabitsListWidget : GlanceAppWidget() {
                 .fillMaxSize()
                 .background(ImageProvider(R.drawable.widget_list_bg))
                 .padding(horizontal = 14.dp, vertical = 12.dp)
-                .clickable(actionStartActivity<MainActivity>())
         ) {
             Column(modifier = GlanceModifier.fillMaxSize()) {
-                // Шапка
+                // Шапка — тап открывает приложение
                 Row(
-                    modifier = GlanceModifier.fillMaxWidth().padding(bottom = 8.dp),
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                        .clickable(actionStartActivity<MainActivity>()),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    CheckSquare(checked = true, decorative = true)
-                    Spacer(modifier = GlanceModifier.width(10.dp))
                     Text(
                         text = "Привычки",
                         style = TextStyle(
@@ -139,7 +139,10 @@ class HabitsListWidget : GlanceAppWidget() {
                         fontWeight = FontWeight.Medium,
                         textDecoration = if (habit.completed) TextDecoration.LineThrough else TextDecoration.None
                     ),
-                    modifier = GlanceModifier.defaultWeight()
+                    // Тап по названию открывает приложение
+                    modifier = GlanceModifier
+                        .defaultWeight()
+                        .clickable(actionStartActivity<MainActivity>())
                 )
                 Text(
                     text = if (habit.completed) "готово" else habit.time,
@@ -161,9 +164,11 @@ class HabitsListWidget : GlanceAppWidget() {
 
     @Composable
     private fun CheckSquare(checked: Boolean, decorative: Boolean) {
+        // Такой же чекбокс, как на карточке привычки: скруглённый квадрат,
+        // синяя заливка + белая галочка при выполнении, иначе — контур
         Box(
             modifier = GlanceModifier
-                .size(28.dp)
+                .size(26.dp)
                 .background(
                     ImageProvider(
                         if (checked) R.drawable.widget_checkbox_on else R.drawable.widget_checkbox_off
@@ -172,13 +177,10 @@ class HabitsListWidget : GlanceAppWidget() {
             contentAlignment = Alignment.Center
         ) {
             if (checked) {
-                Text(
-                    text = "✓",
-                    style = TextStyle(
-                        color = ColorProvider(WidgetColors.onAccent),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                Image(
+                    provider = ImageProvider(R.drawable.widget_check),
+                    contentDescription = null,
+                    modifier = GlanceModifier.size(18.dp)
                 )
             }
         }
@@ -194,9 +196,8 @@ class ToggleHabitAction : ActionCallback {
         val habitId = parameters[habitIdKey] ?: return
         val completed = parameters[completedKey] ?: return
         WidgetDataLoader.toggle(habitId, completed)
-        // Обновляем оба виджета
-        HabitsListWidget().updateAll(context)
-        TodayProgressWidget().updateAll(context)
+        // Обновляем оба виджета (каждый независимо)
+        WidgetDataLoader.refreshAll(context)
     }
 
     companion object {

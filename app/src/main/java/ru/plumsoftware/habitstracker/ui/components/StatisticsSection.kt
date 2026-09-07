@@ -438,7 +438,7 @@ private fun getDailyMotivationMessage(completionRate: Float): String {
         completionRate < 0.7f -> when ((0..2).random()) {
             0 -> "Хорошая работа! Ещё немного усилий! 🔥"
             1 -> "Вы на полпути! Продолжайте в том же духе! ⚡"
-            else -> "Отличный прогресс! Завершите начатое! 🌈"
+            else -> "Отличный прогресс! Завершите начатое!"
         }
         completionRate < 1f -> when ((0..2).random()) {
             0 -> "Почти у цели! Осталось совсем немного! 🎯"
@@ -468,7 +468,7 @@ private fun getMonthlyMotivationMessage(completionRate: Float): String {
         completionRate < 0.7f -> when ((0..2).random()) {
             0 -> "Стабильный прогресс - ключ к успеху! 🔑"
             1 -> "Хорошая работа! Стремитесь к большему! ⭐"
-            else -> "Вы на верном пути! Продолжайте! 🌈"
+            else -> "Вы на верном пути! Продолжайте!"
         }
         completionRate < 1f -> when ((0..2).random()) {
             0 -> "Отличные результаты! Почти идеально! 🎯"

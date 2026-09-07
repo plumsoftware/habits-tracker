@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Notifications
@@ -25,17 +25,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import ru.plumsoftware.habitstracker.data.model.Category
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
 import ru.plumsoftware.habitstracker.ui.theme.Dimen
+import ru.plumsoftware.habitstracker.ui.theme.PillShape
 
 @Composable
 fun HabitCard(
     habitWithStatus: HabitWithStatus,
     onClick: (Habit) -> Unit,
     onDone: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    category: Category? = null,
+    streak: Int = 0
 ) {
     val isDone = habitWithStatus.completed ?: false
     val hasReminder = habitWithStatus.habit.reminderInterval > 0
@@ -66,16 +71,35 @@ fun HabitCard(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(end = Dimen.medium)
+                    .padding(end = Dimen.medium),
+                verticalArrangement = Arrangement.spacedBy(Dimen.medium)
             ) {
-                // TimeCard сверху
-                TimeCard(
-                    time = "${habitWithStatus.habit.reminderTimeHour}:${if (habitWithStatus.habit.reminderTimeMinute == 0) "00" else habitWithStatus.habit.reminderTimeMinute}",
-                    isClickable = false,
-                    onSelectedTime = { _, _ -> }
-                )
+                // Ряд плашек: время · категория · серия
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Dimen.smallPlus)
+                ) {
+                    TimeCard(
+                        time = "${habitWithStatus.habit.reminderTimeHour}:${if (habitWithStatus.habit.reminderTimeMinute == 0) "00" else habitWithStatus.habit.reminderTimeMinute}",
+                        isClickable = false,
+                        onSelectedTime = { _, _ -> },
+                        // Плашка времени серая, пока привычка сегодня не выполнена
+                        containerColor = if (isDone) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainerHighest,
+                        contentColor = if (isDone) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
-                // Затем текст
+                    if (category != null) {
+                        CategoryPill(category = category)
+                    }
+
+                    if (streak > 0) {
+                        StreakPill(streak = streak)
+                    }
+                }
+
+                // Заголовок и описание
                 Column(
                     verticalArrangement = Arrangement.spacedBy(Dimen.small)
                 ) {
@@ -94,7 +118,6 @@ fun HabitCard(
                 // Показываем напоминание с иконкой, если оно включено
                 if (hasReminder) {
                     Row(
-                        modifier = Modifier.padding(top = Dimen.medium),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(Dimen.small)
                     ) {
@@ -158,5 +181,59 @@ fun HabitCard(
                 }
             }
         }
+    }
+}
+
+/** Плашка категории: цветная точка + название. */
+@Composable
+fun CategoryPill(
+    category: Category,
+    modifier: Modifier = Modifier
+) {
+    val categoryColor = Color(category.colorArgb)
+    Row(
+        modifier = modifier
+            .clip(PillShape)
+            // Плашка окрашена в цвет категории
+            .background(categoryColor.copy(alpha = 0.15f))
+            .padding(horizontal = Dimen.mediumPlus, vertical = Dimen.smallPlus),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Dimen.small)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(categoryColor)
+        )
+        Text(
+            text = category.name,
+            style = MaterialTheme.typography.labelLarge,
+            color = categoryColor
+        )
+    }
+}
+
+/** Плашка серии: огонёк + количество дней подряд. */
+@Composable
+fun StreakPill(
+    streak: Int,
+    modifier: Modifier = Modifier
+) {
+    val streakColor = Color(0xFFF5A623)
+    Row(
+        modifier = modifier
+            .clip(PillShape)
+            .background(streakColor.copy(alpha = 0.15f))
+            .padding(horizontal = Dimen.mediumPlus, vertical = Dimen.smallPlus),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Dimen.small)
+    ) {
+        Text(text = "🔥", style = MaterialTheme.typography.labelLarge)
+        Text(
+            text = streak.toString(),
+            style = MaterialTheme.typography.labelLarge,
+            color = streakColor
+        )
     }
 }

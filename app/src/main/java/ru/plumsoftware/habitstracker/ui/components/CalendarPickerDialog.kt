@@ -173,6 +173,255 @@ fun CalendarPickerDialog(
     }
 }
 
+/**
+ * Тот же кастомный календарь, но для выбора диапазона дат (например, для экспорта).
+ * Первый тап задаёт начало, второй — конец; третий начинает выбор заново.
+ */
+@Composable
+fun CalendarRangePickerDialog(
+    onConfirm: (from: Long, to: Long) -> Unit,
+    onDismiss: () -> Unit,
+    initialDateMillis: Long = System.currentTimeMillis(),
+    firstDow: Int = Calendar.MONDAY
+) {
+    var rangeStart by remember { mutableStateOf<Long?>(null) }
+    var rangeEnd by remember { mutableStateOf<Long?>(null) }
+    var visibleMonth by remember { mutableStateOf(firstOfMonth(initialDateMillis)) }
+
+    fun onDayClick(dayMillis: Long) {
+        val d = startOfDay(dayMillis)
+        val start = rangeStart
+        when {
+            start == null || rangeEnd != null -> {
+                // Начинаем новый диапазон
+                rangeStart = d
+                rangeEnd = null
+            }
+            d < start -> {
+                // Кликнули раньше начала — меняем местами
+                rangeStart = d
+                rangeEnd = start
+            }
+            else -> rangeEnd = d
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+            tonalElevation = 0.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(Dimen.extraLarge)
+            ) {
+                // Шапка с навигацией по месяцам
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(
+                        onClick = { visibleMonth = addMonths(visibleMonth, -1) },
+                        modifier = Modifier
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                            contentDescription = "Предыдущий месяц",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Text(
+                        text = monthTitle(visibleMonth),
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    IconButton(
+                        onClick = { visibleMonth = addMonths(visibleMonth, 1) },
+                        modifier = Modifier
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = "Следующий месяц",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                // Подпись выбранного диапазона
+                Text(
+                    text = rangeSubtitle(rangeStart, rangeEnd),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = Dimen.smallPlus)
+                )
+
+                // Дни недели
+                Row(modifier = Modifier.fillMaxWidth().padding(top = Dimen.smallPlus)) {
+                    weekdayLabels(firstDow).forEach { label ->
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                // Сетка дней (6 недель)
+                val cells = monthCells(visibleMonth, firstDow)
+                val start = rangeStart
+                val end = rangeEnd
+                cells.chunked(7).forEach { week ->
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        week.forEach { cell ->
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                if (cell != null) {
+                                    val d = startOfDay(cell)
+                                    val isEndpoint = d == start || d == end
+                                    val inRange = start != null && end != null && d in start..end
+                                    RangeDayCell(
+                                        dayMillis = cell,
+                                        isEndpoint = isEndpoint,
+                                        inRange = inRange,
+                                        onClick = { onDayClick(cell) }
+                                    )
+                                } else {
+                                    Box(modifier = Modifier.aspectRatio(1f))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Кнопки
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = Dimen.large),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(text = "Отмена", style = MaterialTheme.typography.titleSmall)
+                    }
+                    Button(
+                        modifier = Modifier
+                            .padding(start = Dimen.smallPlus)
+                            .shadow(
+                                elevation = 14.dp,
+                                shape = MaterialTheme.shapes.large,
+                                clip = false,
+                                ambientColor = MaterialTheme.colorScheme.primary,
+                                spotColor = MaterialTheme.colorScheme.primary
+                            ),
+                        shape = MaterialTheme.shapes.large,
+                        enabled = rangeStart != null,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
+                        onClick = {
+                            val from = rangeStart ?: return@Button
+                            val to = rangeEnd ?: from
+                            onConfirm(from, endOfDay(to))
+                        }
+                    ) {
+                        Text(text = "Готово", style = MaterialTheme.typography.titleSmall)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RangeDayCell(
+    dayMillis: Long,
+    isEndpoint: Boolean,
+    inRange: Boolean,
+    onClick: () -> Unit
+) {
+    val primary = MaterialTheme.colorScheme.primary
+    val day = Calendar.getInstance().apply { timeInMillis = dayMillis }.get(Calendar.DAY_OF_MONTH)
+
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .padding(3.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isEndpoint) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(primary.copy(alpha = 0.5f), Color.Transparent)
+                        ),
+                        shape = MaterialTheme.shapes.medium
+                    )
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .then(
+                    if (isEndpoint) Modifier.shadow(
+                        elevation = 12.dp,
+                        shape = MaterialTheme.shapes.medium,
+                        clip = false,
+                        ambientColor = primary,
+                        spotColor = primary
+                    ) else Modifier
+                )
+                .background(
+                    color = when {
+                        isEndpoint -> primary
+                        inRange -> MaterialTheme.colorScheme.primaryContainer
+                        else -> Color.Transparent
+                    },
+                    shape = MaterialTheme.shapes.medium
+                )
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = day.toString(),
+                style = MaterialTheme.typography.bodyLarge,
+                color = when {
+                    isEndpoint -> MaterialTheme.colorScheme.onPrimary
+                    inRange -> MaterialTheme.colorScheme.onPrimaryContainer
+                    else -> MaterialTheme.colorScheme.onSurface
+                }
+            )
+        }
+    }
+}
+
+private fun rangeSubtitle(start: Long?, end: Long?): String {
+    val fmt = SimpleDateFormat("d MMM", Locale("ru"))
+    return when {
+        start == null -> "Выберите начало периода"
+        end == null -> "${fmt.format(start)} — выберите конец"
+        else -> "${fmt.format(start)} — ${fmt.format(end)}"
+    }
+}
+
+private fun endOfDay(millis: Long): Long = Calendar.getInstance().apply {
+    timeInMillis = millis
+    set(Calendar.HOUR_OF_DAY, 23)
+    set(Calendar.MINUTE, 59)
+    set(Calendar.SECOND, 59)
+    set(Calendar.MILLISECOND, 999)
+}.timeInMillis
+
 @Composable
 private fun DayCell(
     dayMillis: Long,

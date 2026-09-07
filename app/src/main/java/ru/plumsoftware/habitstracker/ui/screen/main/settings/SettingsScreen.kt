@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,6 +21,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Notifications
@@ -26,6 +30,7 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,20 +42,38 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import ru.plumsoftware.habitstracker.BuildConfig
+import ru.plumsoftware.habitstracker.data.export.ExportManager
 import ru.plumsoftware.habitstracker.data.settings.ThemeMode
 import ru.plumsoftware.habitstracker.data.settings.WeekStart
+import ru.plumsoftware.habitstracker.ui.components.CalendarRangePickerDialog
 import ru.plumsoftware.habitstracker.ui.components.IOSSwitch
 import ru.plumsoftware.habitstracker.ui.theme.Dimen
+import java.io.File
+import java.util.Calendar
 
 private val seriesColor = Color(0xFFF5A623)
+
+/** Формат экспорта статистики. */
+private enum class ExportFormat(
+    val mime: String,
+    val suffix: String,
+    val defaultFileName: String
+) {
+    CSV("text/csv", ".csv", "habits.csv"),
+    PDF("application/pdf", ".pdf", "habits.pdf")
+}
 
 @Composable
 fun SettingsScreen(
@@ -68,6 +91,49 @@ fun SettingsScreen(
     var showWeekStartDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+
+    // ── Состояние экспорта ──
+    val exportManager: ExportManager = koinInject()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // Формат, для которого сейчас выбирается диапазон дат (null — пикер закрыт)
+    var rangePickerFormat by remember { mutableStateOf<ExportFormat?>(null) }
+    var isExporting by remember { mutableStateOf(false) }
+    // Готовый файл + его формат — показываем диалог «Поделиться / Сохранить»
+    var readyExport by remember { mutableStateOf<Pair<File, ExportFormat>?>(null) }
+    // Файл, ожидающий сохранения через SAF
+    var pendingSaveFile by remember { mutableStateOf<File?>(null) }
+
+    val saveLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("*/*")
+    ) { uri ->
+        val file = pendingSaveFile
+        if (uri != null && file != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    file.inputStream().use { it.copyTo(out) }
+                }
+            }
+        }
+        pendingSaveFile = null
+    }
+
+    fun startExport(format: ExportFormat, from: Long, to: Long) {
+        isExporting = true
+        scope.launch {
+            val file = runCatching {
+                when (format) {
+                    ExportFormat.CSV -> exportManager.exportCsv(from, to)
+                    ExportFormat.PDF -> exportManager.exportPdf(from, to)
+                }
+            }.getOrNull()
+            isExporting = false
+            if (file != null) {
+                readyExport = file to format
+            }
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -134,6 +200,64 @@ fun SettingsScreen(
                 )
             }
         }
+
+        // ДАННЫЕ
+        item {
+            SettingsSection(title = "Данные") {
+                SettingsActionRow(
+                    icon = Icons.Filled.FileDownload,
+                    title = "Экспорт в CSV",
+                    trailing = ExportFormat.CSV.suffix,
+                    onClick = { rangePickerFormat = ExportFormat.CSV }
+                )
+                RowDivider()
+                SettingsActionRow(
+                    icon = Icons.Filled.Description,
+                    title = "Экспорт в PDF",
+                    trailing = ExportFormat.PDF.suffix,
+                    onClick = { rangePickerFormat = ExportFormat.PDF }
+                )
+            }
+        }
+
+        // Нижний отступ
+        item { Spacer(modifier = Modifier.height(Dimen.extraLarge)) }
+    }
+
+    // Диалог выбора диапазона дат — переиспользуем кастомный календарь приложения
+    rangePickerFormat?.let { format ->
+        CalendarRangePickerDialog(
+            onConfirm = { from, to ->
+                rangePickerFormat = null
+                startExport(format, from, to)
+            },
+            onDismiss = { rangePickerFormat = null },
+            firstDow = when (settings.weekStart) {
+                WeekStart.SUNDAY -> Calendar.SUNDAY
+                else -> Calendar.MONDAY
+            }
+        )
+    }
+
+    // Диалог загрузки с затемнением
+    if (isExporting) {
+        ExportLoadingDialog()
+    }
+
+    // Диалог «Поделиться / Сохранить»
+    readyExport?.let { (file, format) ->
+        ExportReadyDialog(
+            onShare = {
+                exportManager.share(file, format.mime)
+                readyExport = null
+            },
+            onSave = {
+                pendingSaveFile = file
+                readyExport = null
+                saveLauncher.launch(format.defaultFileName)
+            },
+            onDismiss = { readyExport = null }
+        )
     }
 
     if (showWeekStartDialog) {
@@ -335,6 +459,83 @@ private fun <T> ChoiceDialog(
                     }
                 }
             }
+        }
+    )
+}
+
+/** Ряд-действие: иконка, заголовок, серый суффикс справа (без стрелки). */
+@Composable
+private fun SettingsActionRow(
+    icon: ImageVector,
+    title: String,
+    trailing: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = Dimen.large, vertical = Dimen.mediumPlus),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Dimen.mediumPlus)
+    ) {
+        IconChip(
+            icon = icon,
+            tint = MaterialTheme.colorScheme.primary,
+            container = MaterialTheme.colorScheme.primaryContainer
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = trailing,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun ExportLoadingDialog() {
+    androidx.compose.ui.window.Dialog(onDismissRequest = { }) {
+        Card(
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainer
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(Dimen.extraLarge),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(Dimen.large)
+            ) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                Text(
+                    text = "Формируем файл…",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExportReadyDialog(
+    onShare: () -> Unit,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Файл готов") },
+        text = { Text("Поделиться файлом или сохранить его на устройство?") },
+        confirmButton = {
+            TextButton(onClick = onShare) { Text("Поделиться") }
+        },
+        dismissButton = {
+            TextButton(onClick = onSave) { Text("Сохранить на устройство") }
         }
     )
 }

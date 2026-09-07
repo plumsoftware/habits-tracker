@@ -10,15 +10,15 @@ plugins {
 android {
     namespace = "ru.plumsoftware.habitstracker"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "ru.plumsoftware.habitstracker"
         minSdk = 24
-        targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.4"
+        targetSdk = 37
+        versionCode = 5
+        versionName = "1.0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

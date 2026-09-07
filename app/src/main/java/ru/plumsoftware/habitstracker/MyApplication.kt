@@ -12,9 +12,11 @@ import org.koin.dsl.module
 import ru.plumsoftware.habitstracker.data.config.PlatformConfig
 import ru.plumsoftware.habitstracker.data.config.storePlatformConfig
 import ru.plumsoftware.habitstracker.data.database.AppStatsRepository
+import ru.plumsoftware.habitstracker.data.database.CategoryRepository
 import ru.plumsoftware.habitstracker.data.database.HabitDatabase
 import ru.plumsoftware.habitstracker.data.database.HabitRepository
 import ru.plumsoftware.habitstracker.data.database.NotificationRepository
+import ru.plumsoftware.habitstracker.data.export.ExportManager
 import ru.plumsoftware.habitstracker.data.settings.SettingsRepository
 import ru.plumsoftware.habitstracker.data.settings.ThemeRepository
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeViewModel
@@ -48,7 +50,9 @@ class MyApplication : Application() {
                     NotificationRepository.notificationRepositoryModule,
                     SettingsViewModel.settingsViewModelModule,
                     NotificationsViewModel.viewModelModule,
-                    AppStatsRepository.appStatsModule
+                    AppStatsRepository.appStatsModule,
+                    CategoryRepository.categoryRepositoryModule,
+                    ExportManager.exportModule
                 )
             )
         }

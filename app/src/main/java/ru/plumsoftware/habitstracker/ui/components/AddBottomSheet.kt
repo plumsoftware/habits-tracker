@@ -6,33 +6,49 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,7 +62,10 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ru.plumsoftware.habitstracker.ui.theme.PillShape
+import ru.plumsoftware.habitstracker.data.model.Category
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.Periodicity
 import ru.plumsoftware.habitstracker.getStartOfDay
@@ -58,9 +77,35 @@ fun AddBottomSheet(
     onSaveHabit: (Habit) -> Unit,
     onUpdateHabit: (Habit) -> Unit = {}, // Новый параметр для обновления
     onDeleteHabit: (() -> Unit)? = null, // Новый параметр для удаления
-    editingHabit: Habit? = null // Привычка для редактирования (null = создание)
+    editingHabit: Habit? = null, // Привычка для редактирования (null = создание)
+    categories: List<Category> = emptyList(),
+    onCreateCategory: (name: String, colorArgb: Long) -> Unit = { _, _ -> },
+    onUpdateCategory: (Category) -> Unit = {},
+    onDeleteCategory: (Category) -> Unit = {}
 ) {
     val isEditMode = editingHabit != null
+
+    // Выбранная категория (null = без категории)
+    var selectedCategoryId by remember { mutableStateOf(editingHabit?.categoryId) }
+
+    // Диалог создания/редактирования категории: null — закрыт; Category? внутри — режим
+    var categoryDialogState by remember { mutableStateOf<CategoryDialogState?>(null) }
+
+    if (categoryDialogState != null) {
+        CategoryEditDialog(
+            initial = categoryDialogState!!.category,
+            onDismiss = { categoryDialogState = null },
+            onSave = { name, color ->
+                val editing = categoryDialogState!!.category
+                if (editing == null) {
+                    onCreateCategory(name, color)
+                } else {
+                    onUpdateCategory(editing.copy(name = name, colorArgb = color))
+                }
+                categoryDialogState = null
+            }
+        )
+    }
 
     // Инициализируем состояния из editingHabit или пустыми значениями
     var title by remember { mutableStateOf(editingHabit?.title ?: "") }
@@ -154,6 +199,36 @@ fun AddBottomSheet(
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.fillMaxWidth()
         )
+
+        // Секция выбора категории
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(
+                space = Dimen.smallPlus,
+                alignment = Alignment.Top
+            ),
+            horizontalAlignment = Alignment.Start
+        ) {
+            Text(
+                text = "Категория",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            CategorySelector(
+                categories = categories,
+                selectedCategoryId = selectedCategoryId,
+                onSelect = { id ->
+                    // Повторный тап по выбранной категории снимает выбор
+                    selectedCategoryId = if (selectedCategoryId == id) null else id
+                },
+                onAddClick = { categoryDialogState = CategoryDialogState(category = null) },
+                onEditCategory = { categoryDialogState = CategoryDialogState(category = it) },
+                onDeleteCategory = { cat ->
+                    if (selectedCategoryId == cat.id) selectedCategoryId = null
+                    onDeleteCategory(cat)
+                }
+            )
+        }
 
         // Поля формы остаются без изменений
         Column(
@@ -443,7 +518,8 @@ fun AddBottomSheet(
                         },
                         reminderTimeHour = selectedTime.first ?: 0,
                         reminderTimeMinute = selectedTime.second ?: 0,
-                        reminderInterval = selectedInterval
+                        reminderInterval = selectedInterval,
+                        categoryId = selectedCategoryId
                     )
                 } else {
                     // Режим создания - создаем новую привычку
@@ -460,7 +536,8 @@ fun AddBottomSheet(
                         targetCount = 1,
                         reminderTimeHour = selectedTime.first ?: 0,
                         reminderTimeMinute = selectedTime.second ?: 0,
-                        reminderInterval = selectedInterval
+                        reminderInterval = selectedInterval,
+                        categoryId = selectedCategoryId
                     )
                 }
 
@@ -500,4 +577,236 @@ fun AddBottomSheet(
             }
         }
     }
+}
+
+/** Единая высота плашек категорий и кнопки «+». */
+private val CategoryChipHeight = 38.dp
+
+/** Состояние диалога категории: category == null — создание, иначе редактирование. */
+private data class CategoryDialogState(val category: Category?)
+
+/**
+ * Горизонтальный список категорий: первым идёт кнопка «+», затем чипы категорий.
+ * Долгое нажатие на пользовательскую категорию открывает меню «Изменить/Удалить».
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CategorySelector(
+    categories: List<Category>,
+    selectedCategoryId: String?,
+    onSelect: (String) -> Unit,
+    onAddClick: () -> Unit,
+    onEditCategory: (Category) -> Unit,
+    onDeleteCategory: (Category) -> Unit
+) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Dimen.smallPlus),
+        verticalArrangement = Arrangement.spacedBy(Dimen.smallPlus)
+    ) {
+        // Кнопка добавления категории — квадрат высотой с чип категории
+        Box(
+            modifier = Modifier
+                .height(CategoryChipHeight)
+                .aspectRatio(1f)
+                .clip(PillShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                .clickable(role = Role.Button, onClick = onAddClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = "Добавить категорию",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        categories.forEach { category ->
+            CategoryChip(
+                category = category,
+                selected = category.id == selectedCategoryId,
+                onSelect = { onSelect(category.id) },
+                onEdit = { onEditCategory(category) },
+                onDelete = { onDeleteCategory(category) }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CategoryChip(
+    category: Category,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    val dotColor = Color(category.colorArgb)
+
+    Box {
+        Row(
+            modifier = Modifier
+                .height(CategoryChipHeight)
+                .clip(PillShape)
+                .background(
+                    if (selected) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+                .border(
+                    width = if (selected) 1.5.dp else 0.dp,
+                    color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    shape = PillShape
+                )
+                .combinedClickable(
+                    onClick = onSelect,
+                    // Долгое нажатие — только для пользовательских категорий
+                    onLongClick = if (!category.isBuiltIn) {
+                        { menuExpanded = true }
+                    } else null
+                )
+                .padding(horizontal = Dimen.mediumPlus),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Dimen.small)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(dotColor)
+            )
+            Text(
+                text = category.name,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+            )
+        }
+
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { menuExpanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Изменить") },
+                leadingIcon = {
+                    Icon(Icons.Outlined.Edit, contentDescription = null)
+                },
+                onClick = {
+                    menuExpanded = false
+                    onEdit()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Удалить") },
+                leadingIcon = {
+                    Icon(Icons.Outlined.Delete, contentDescription = null)
+                },
+                onClick = {
+                    menuExpanded = false
+                    onDelete()
+                }
+            )
+        }
+    }
+}
+
+/** Диалог создания/редактирования категории: название + палитра цветов. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CategoryEditDialog(
+    initial: Category?,
+    onDismiss: () -> Unit,
+    onSave: (name: String, colorArgb: Long) -> Unit
+) {
+    var name by remember { mutableStateOf(initial?.name ?: "") }
+    var color by remember { mutableLongStateOf(initial?.colorArgb ?: Category.PALETTE.first()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(if (initial == null) "Новая категория" else "Изменить категорию")
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Dimen.large)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Название") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Text(
+                    text = "Цвет",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Dimen.mediumPlus),
+                    verticalArrangement = Arrangement.spacedBy(Dimen.mediumPlus)
+                ) {
+                    Category.PALETTE.forEach { paletteColor ->
+                        val isSelected = paletteColor == color
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(paletteColor))
+                                .border(
+                                    width = if (isSelected) 3.dp else 0.dp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    shape = CircleShape
+                                )
+                                .clickable { color = paletteColor },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Filled.Check,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                modifier = Modifier.shadow(
+                    elevation = 14.dp,
+                    shape = MaterialTheme.shapes.large,
+                    clip = false,
+                    ambientColor = MaterialTheme.colorScheme.primary,
+                    spotColor = MaterialTheme.colorScheme.primary
+                ),
+                shape = MaterialTheme.shapes.large,
+                contentPadding = PaddingValues(horizontal = Dimen.large, vertical = Dimen.mediumPlus),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
+                enabled = name.isNotBlank(),
+                onClick = { onSave(name.trim(), color) }
+            ) {
+                Text(
+                    text = "Сохранить",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Отмена")
+            }
+        }
+    )
 }

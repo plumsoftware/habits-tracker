@@ -14,5 +14,8 @@ data class Habit(
     val targetCount: Int = 1, // Количество выполнений за период
     val reminderTimeHour: Int,
     val reminderTimeMinute: Int,
-    val reminderInterval: Int
+    val reminderInterval: Int,
+    // Ссылка на категорию (null = без категории). FK не задаём намеренно:
+    // удаление категории не должно каскадно трогать привычки.
+    val categoryId: String? = null
 )

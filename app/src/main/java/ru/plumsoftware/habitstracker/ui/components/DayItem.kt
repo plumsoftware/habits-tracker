@@ -53,7 +53,7 @@ fun DayItem(
     ) {
         Column(
             modifier = Modifier
-                .padding(horizontal = Dimen.mediumPlus)
+                .padding(horizontal = Dimen.small)
                 .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(
                 space = Dimen.small,
