@@ -1,16 +1,29 @@
 package ru.plumsoftware.habitstracker.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PageSize
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerSnapDistance
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import ru.plumsoftware.habitstracker.ui.theme.Dimen
 import java.text.SimpleDateFormat
@@ -21,12 +34,17 @@ import kotlin.math.roundToInt
 private const val DAY_MS = 24 * 60 * 60 * 1000L
 private const val WEEKS_BEFORE = 26   // сколько недель доступно для прокрутки назад
 private const val WEEKS_TOTAL = 79    // всего недель (назад + вперёд)
+private const val TABLET_BREAKPOINT_DP = 520
 
 /**
- * Недельная лента дат. Показывает дни, начиная с начала текущей недели (по настройке начала
- * недели). Количество видимых дней зависит от ширины: узкий телефон — 5, обычный — 7, планшет — 14.
- * Прокрутка «прилипает» к границам недель (от начала недели до начала недели).
+ * Недельная лента дат. Прокрутка организована как Pager: одна страница = одна неделя.
+ * Свайп всегда переключает ровно одну неделю (аналог ViewPager, PagerSnapDistance.atMost(1)),
+ * независимо от силы свайпа. В конце каждой недели — вертикальный дивайдер 2dp с равными
+ * отступами от предыдущего (последний день недели) и следующего (первый день следующей недели
+ * при перетаскивании) элементов.
+ * На планшете (широкий экран) в области Pager-а помещается сразу 2 недели.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CalendarView(
     selectedDate: Long,
@@ -48,66 +66,86 @@ fun CalendarView(
         c.add(Calendar.DAY_OF_MONTH, -WEEKS_BEFORE * 7)
         c.timeInMillis
     }
-    val totalDays = WEEKS_TOTAL * 7
-    val currentWeekStartIndex = WEEKS_BEFORE * 7
 
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentWeekStartIndex)
+    val currentWeekPage = WEEKS_BEFORE
+    val pagerState = rememberPagerState(initialPage = currentWeekPage) { WEEKS_TOTAL }
     val dateFormat = remember { SimpleDateFormat("EEE", Locale.getDefault()) }
     val selectedStart = remember(selectedDate) { startOfDay(selectedDate) }
 
     // Прокрутка к неделе выбранной даты (например, после выбора в диалоге календаря)
     LaunchedEffect(selectedStart, baseWeekStart) {
-        val idx = ((selectedStart - baseWeekStart).toDouble() / DAY_MS).roundToInt()
-        if (idx in 0 until totalDays) {
-            val weekStart = (idx / 7) * 7
-            listState.animateScrollToItem(weekStart)
-        }
-    }
-
-    // Прилипание к началу недели после остановки прокрутки
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (!listState.isScrollInProgress && listState.layoutInfo.totalItemsCount > 0) {
-            val firstIndex = listState.firstVisibleItemIndex
-            val firstSize = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 1
-            val offset = listState.firstVisibleItemScrollOffset
-            val approx = firstIndex + if (offset > firstSize / 2) 1 else 0
-            val target = ((approx / 7.0).roundToInt() * 7).coerceIn(0, totalDays - 1)
-            if (target != firstIndex || offset != 0) {
-                listState.animateScrollToItem(target)
-            }
+        val dayIndex = ((selectedStart - baseWeekStart).toDouble() / DAY_MS).roundToInt()
+        val page = (dayIndex / 7).coerceIn(0, WEEKS_TOTAL - 1)
+        if (!pagerState.isScrollInProgress && page != pagerState.currentPage) {
+            pagerState.animateScrollToPage(page)
         }
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        // Сколько дней помещается: узкий экран — 5, обычный телефон — 7, планшет/широкий — 14
-        val visibleDays = when {
-            maxWidth >= 520.dp -> 14
-            maxWidth < 340.dp -> 5
-            else -> 7
-        }
+        // На планшете показываем 2 недели одновременно, на телефоне — 1
+        val weeksPerScreen = if (maxWidth >= TABLET_BREAKPOINT_DP.dp) 2 else 1
         val gap = Dimen.small
-        val dayWidth = (maxWidth - gap * (visibleDays - 1)) / visibleDays
+        val dividerThickness = 2.dp
+        val pageWidth: Dp = maxWidth / weeksPerScreen
 
-        LazyRow(
-            state = listState,
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(gap)
-        ) {
-            items(totalDays) { index ->
-                val dayCal = Calendar.getInstance().apply {
-                    timeInMillis = baseWeekStart
-                    add(Calendar.DAY_OF_MONTH, index)
+        // Внутри страницы: 7 дней с gap между ними (6 промежутков) +
+        // gap перед дивайдером + сам дивайдер + gap после дивайдера
+        val fixedWidth = gap * 6 + gap + dividerThickness + gap
+        val dayWidth = (pageWidth - fixedWidth) / 7
+
+        HorizontalPager(
+            state = pagerState,
+            pageSize = PageSize.Fixed(pageWidth),
+            flingBehavior = PagerDefaults.flingBehavior(
+                state = pagerState,
+                // Ключевая часть: фикс на ViewPager-поведение — не больше одной страницы за свайп,
+                // независимо от скорости флинга
+                pagerSnapDistance = PagerSnapDistance.atMost(1)
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) { page ->
+            val weekStartMillis = baseWeekStart + page * 7L * DAY_MS
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
+            ) {
+                for (d in 0 until 7) {
+                    val dayCal = Calendar.getInstance().apply {
+                        timeInMillis = weekStartMillis
+                        add(Calendar.DAY_OF_MONTH, d)
+                    }
+                    val dayMillis = startOfDay(dayCal.timeInMillis)
+                    DayItem(
+                        day = dayCal.get(Calendar.DAY_OF_MONTH),
+                        dayName = dateFormat.format(dayCal.time),
+                        isCurrentMonth = true,
+                        isSelected = dayMillis == selectedStart,
+                        progress = dayProgress[dayMillis] ?: 0f,
+                        onClick = { onDateSelected(dayMillis) },
+                        modifier = Modifier.width(dayWidth)
+                    )
+                    // Отступ между днями — только между ними, не после последнего
+                    if (d != 6) {
+                        Spacer(modifier = Modifier.width(gap))
+                    }
                 }
-                val dayMillis = startOfDay(dayCal.timeInMillis)
-                DayItem(
-                    day = dayCal.get(Calendar.DAY_OF_MONTH),
-                    dayName = dateFormat.format(dayCal.time),
-                    isCurrentMonth = true,
-                    isSelected = dayMillis == selectedStart,
-                    progress = dayProgress[dayMillis] ?: 0f,
-                    onClick = { onDateSelected(dayMillis) },
-                    modifier = Modifier.width(dayWidth)
+
+                // Отступ перед дивайдером — такой же, как между днями
+                Spacer(modifier = Modifier.width((gap)))
+
+                // Дивайдер конца недели, 2dp толщиной, виден при перетаскивании между неделями
+                Box(
+                    modifier = Modifier
+                        .padding(vertical = 2.dp)
+                        .fillMaxHeight()
+                        .width(dividerThickness)
+                        .background(MaterialTheme.colorScheme.outlineVariant)
                 )
+
+                // Отступ после дивайдера — равен отступу перед ним
+                Spacer(modifier = Modifier.width((gap)))
             }
         }
     }

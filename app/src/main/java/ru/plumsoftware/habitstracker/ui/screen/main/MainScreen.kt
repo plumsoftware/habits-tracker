@@ -256,6 +256,7 @@ fun HomeScreen(
                         if (done) viewModel.onEvent(HomeEvent.MarkHabitCompleted(habitId))
                         else viewModel.onEvent(HomeEvent.UnmarkHabitCompleted(habitId))
                     },
+                    showGridToggle = isExpanded,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
@@ -504,6 +505,7 @@ fun HomeCenterContent(
     onOpenCalendar: () -> Unit,
     onSelectDate: (Long) -> Unit,
     onHabitClick: (Habit) -> Unit,
+    showGridToggle: Boolean = true,
     onToggleDone: (habitId: String, done: Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -534,11 +536,13 @@ fun HomeCenterContent(
 
             Row(horizontalArrangement = Arrangement.spacedBy(Dimen.smallPlus)) {
                 // Переключение отображения списка: 1 колонка / 2 колонки
-                RoundIconCard(
-                    imageVector = if (isGrid) Icons.Filled.ViewAgenda else Icons.Filled.GridView,
-                    contentDescription = if (isGrid) "В одну колонку" else "В две колонки",
-                    onClick = onToggleGrid
-                )
+                if (showGridToggle) {
+                    RoundIconCard(
+                        imageVector = if (isGrid) Icons.Filled.ViewAgenda else Icons.Filled.GridView,
+                        contentDescription = if (isGrid) "В одну колонку" else "В две колонки",
+                        onClick = onToggleGrid
+                    )
+                }
                 // Выбор даты
                 RoundIconCard(
                     imageVector = Icons.Outlined.CalendarMonth,

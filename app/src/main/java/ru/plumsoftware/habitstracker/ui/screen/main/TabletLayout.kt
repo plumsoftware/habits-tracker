@@ -74,6 +74,7 @@ fun ExpandedLayout(
     onHabitClick: (Habit) -> Unit,
     onToggleDone: (habitId: String, done: Boolean) -> Unit,
     onAddHabit: () -> Unit,
+    isExpanded: Boolean = true,
     settingsContent: @Composable (PaddingValues) -> Unit,
     notificationsContent: @Composable () -> Unit
 ) {
@@ -109,6 +110,7 @@ fun ExpandedLayout(
                     onSelectDate = onSelectDate,
                     onHabitClick = onHabitClick,
                     onToggleDone = onToggleDone,
+                    showGridToggle = isExpanded,
                     modifier = Modifier.fillMaxSize()
                 )
 
