@@ -24,8 +24,18 @@ import ru.plumsoftware.habitstracker.ui.screen.main.settings.SettingsViewModel
 import ru.plumsoftware.habitstracker.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {
+    // Deeplink из виджета (habits://...), наблюдается Compose
+    private val deeplinkState = androidx.compose.runtime.mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        deeplinkState.value = intent.data?.toString()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        deeplinkState.value = intent?.data?.toString()
 
         // Телефон — только портрет; планшет/большой экран — автоповорот разрешён
         requestedOrientation = if (resources.getBoolean(R.bool.is_tablet)) {
@@ -64,7 +74,9 @@ class MainActivity : ComponentActivity() {
                     false -> OnboardingScreen(onFinish = { settingsViewModel.completeOnboarding() })
                     true -> HomeScreen(
                         settingsViewModel = settingsViewModel,
-                        isDarkTheme = isDarkTheme
+                        isDarkTheme = isDarkTheme,
+                        deeplink = deeplinkState.value,
+                        onDeeplinkHandled = { deeplinkState.value = null },
                     )
                 }
             }

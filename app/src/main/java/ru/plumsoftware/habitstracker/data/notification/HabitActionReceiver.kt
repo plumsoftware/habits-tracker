@@ -33,6 +33,7 @@ class HabitActionReceiver : BroadcastReceiver() {
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
                         repository.markHabitCompleted(habitId, System.currentTimeMillis())
+                        ru.plumsoftware.habitstracker.ui.widget.WidgetUpdater.updateAll(context)
                     } finally {
                         pending.finish()
                     }

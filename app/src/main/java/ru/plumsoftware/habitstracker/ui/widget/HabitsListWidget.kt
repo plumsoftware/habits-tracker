@@ -2,24 +2,20 @@ package ru.plumsoftware.habitstracker.ui.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
-import androidx.glance.action.ActionParameters
-import androidx.glance.action.actionParametersOf
-import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
-import androidx.glance.appwidget.action.ActionCallback
-import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
-import androidx.glance.Image
-import androidx.glance.ImageProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
@@ -36,70 +32,56 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import ru.plumsoftware.habitstracker.MainActivity
-import ru.plumsoftware.habitstracker.R
 
+/** Виджет «Привычки на сегодня» (4×3) — список с отметкой прямо с рабочего стола. */
 class HabitsListWidget : GlanceAppWidget() {
+
+    override val sizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val data = WidgetDataLoader.load()
-        provideContent { Content(data) }
+        provideContent { Content(context, data) }
     }
 
     @Composable
-    private fun Content(data: WidgetData) {
-        Box(
+    private fun Content(context: Context, data: WidgetData) {
+        Column(
             modifier = GlanceModifier
                 .fillMaxSize()
-                .background(ImageProvider(R.drawable.widget_list_bg))
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .cornerRadius(28.dp)
+                .background(WidgetColors.surface)
+                .padding(16.dp),
         ) {
-            Column(modifier = GlanceModifier.fillMaxSize()) {
-                // Шапка — тап открывает приложение
-                Row(
-                    modifier = GlanceModifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp)
-                        .clickable(actionStartActivity<MainActivity>()),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            // Хедер
+            Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = GlanceModifier.defaultWeight()) {
+                    Text("Привычки на сегодня", style = TextStyle(color = WidgetColors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold))
                     Text(
-                        text = "Привычки",
-                        style = TextStyle(
-                            color = ColorProvider(WidgetColors.onSurface),
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        modifier = GlanceModifier.defaultWeight()
-                    )
-                    Text(
-                        text = data.dateLabel,
-                        style = TextStyle(
-                            color = ColorProvider(WidgetColors.accent),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                        "${data.completed}/${data.total} · ${data.weekdayFull}",
+                        style = TextStyle(color = WidgetColors.textSecondary, fontSize = 11.5.sp, fontWeight = FontWeight.Medium),
                     )
                 }
+                Box(
+                    modifier = GlanceModifier.size(34.dp).cornerRadius(12.dp).background(WidgetColors.accent)
+                        .clickable(deeplinkAction(context, Deeplinks.NEW_HABIT)),
+                    contentAlignment = Alignment.Center,
+                ) { Text("+", style = TextStyle(color = WidgetColors.onAccent, fontSize = 20.sp, fontWeight = FontWeight.Bold)) }
+            }
+            Spacer(GlanceModifier.height(10.dp))
 
-                if (data.habits.isEmpty()) {
+            if (data.habits.isEmpty()) {
+                EmptyState(context)
+            } else {
+                if (data.completed >= data.total && data.total > 0) {
                     Box(
-                        modifier = GlanceModifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "Нет привычек на сегодня",
-                            style = TextStyle(
-                                color = ColorProvider(WidgetColors.onSurfaceMuted),
-                                fontSize = 14.sp
-                            )
-                        )
-                    }
-                } else {
-                    LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                        items(data.habits, itemId = { it.id.hashCode().toLong() }) { habit ->
-                            HabitRow(habit)
-                        }
+                        modifier = GlanceModifier.fillMaxWidth().cornerRadius(14.dp).background(WidgetColors.successSoft).padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { Text("Идеальный день 🎉", style = TextStyle(color = WidgetColors.success, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)) }
+                    Spacer(GlanceModifier.height(8.dp))
+                }
+                LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
+                    items(data.habits, itemId = { it.id.hashCode().toLong() }) { habit ->
+                        HabitRow(context, habit)
                     }
                 }
             }
@@ -107,102 +89,69 @@ class HabitsListWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun HabitRow(habit: WidgetHabit) {
-        Column {
-            Row(
-                modifier = GlanceModifier
-                    .fillMaxWidth()
-                    .padding(vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = GlanceModifier.clickable(
-                        actionRunCallback<ToggleHabitAction>(
-                            actionParametersOf(
-                                ToggleHabitAction.habitIdKey to habit.id,
-                                ToggleHabitAction.completedKey to !habit.completed
-                            )
-                        )
-                    )
-                ) {
-                    CheckSquare(checked = habit.completed, decorative = false)
-                }
-                Spacer(modifier = GlanceModifier.width(10.dp))
+    private fun HabitRow(context: Context, habit: WidgetHabit) {
+        val catColor = Color(habit.categoryArgb)
+        Row(
+            modifier = GlanceModifier.fillMaxWidth().padding(vertical = 5.dp)
+                .clickable(deeplinkAction(context, Deeplinks.habit(habit.id))),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = GlanceModifier.size(36.dp).cornerRadius(12.dp).background(ColorProvider(catColor.copy(alpha = 0.16f))),
+                contentAlignment = Alignment.Center,
+            ) { Text(habit.emoji, style = TextStyle(fontSize = 17.sp)) }
+            Spacer(GlanceModifier.width(11.dp))
+            Column(modifier = GlanceModifier.defaultWeight()) {
                 Text(
-                    text = habit.title,
+                    habit.title,
                     maxLines = 1,
                     style = TextStyle(
-                        color = ColorProvider(
-                            if (habit.completed) WidgetColors.onSurfaceMuted else WidgetColors.onSurface
-                        ),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        textDecoration = if (habit.completed) TextDecoration.LineThrough else TextDecoration.None
+                        color = if (habit.completed) WidgetColors.textDisabled else WidgetColors.textPrimary,
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        textDecoration = if (habit.completed) TextDecoration.LineThrough else TextDecoration.None,
                     ),
-                    // Тап по названию открывает приложение
-                    modifier = GlanceModifier
-                        .defaultWeight()
-                        .clickable(actionStartActivity<MainActivity>())
                 )
                 Text(
-                    text = if (habit.completed) "готово" else habit.time,
-                    style = TextStyle(
-                        color = ColorProvider(WidgetColors.onSurfaceMuted),
-                        fontSize = 13.sp
-                    )
+                    habit.chainAfterTitle?.let { "после «$it»" } ?: habit.time,
+                    maxLines = 1,
+                    style = TextStyle(color = WidgetColors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium),
                 )
             }
-            // Разделитель
-            Box(
-                modifier = GlanceModifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(ColorProvider(WidgetColors.divider))
-            ) {}
+            Spacer(GlanceModifier.width(8.dp))
+            // Чекбокс / прогресс цели
+            if (habit.goal > 1 && !habit.completed) {
+                Box(
+                    modifier = GlanceModifier.size(30.dp).cornerRadius(15.dp).background(WidgetColors.accentSoft)
+                        .clickable(toggleAction(habit.id, true)),
+                    contentAlignment = Alignment.Center,
+                ) { Text("${habit.count}/${habit.goal}", style = TextStyle(color = WidgetColors.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)) }
+            } else {
+                Box(
+                    modifier = GlanceModifier.size(30.dp).cornerRadius(15.dp)
+                        .background(if (habit.completed) WidgetColors.accent else WidgetColors.surfaceMuted)
+                        .clickable(toggleAction(habit.id, !habit.completed)),
+                    contentAlignment = Alignment.Center,
+                ) { if (habit.completed) Text("✓", style = TextStyle(color = WidgetColors.onAccent, fontSize = 15.sp, fontWeight = FontWeight.Bold)) }
+            }
         }
     }
 
     @Composable
-    private fun CheckSquare(checked: Boolean, decorative: Boolean) {
-        // Такой же чекбокс, как на карточке привычки: скруглённый квадрат,
-        // синяя заливка + белая галочка при выполнении, иначе — контур
-        Box(
-            modifier = GlanceModifier
-                .size(26.dp)
-                .background(
-                    ImageProvider(
-                        if (checked) R.drawable.widget_checkbox_on else R.drawable.widget_checkbox_off
-                    )
-                ),
-            contentAlignment = Alignment.Center
+    private fun EmptyState(context: Context) {
+        Column(
+            modifier = GlanceModifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (checked) {
-                Image(
-                    provider = ImageProvider(R.drawable.widget_check),
-                    contentDescription = null,
-                    modifier = GlanceModifier.size(18.dp)
-                )
-            }
+            Text("🌱", style = TextStyle(fontSize = 32.sp))
+            Spacer(GlanceModifier.height(8.dp))
+            Text("Здесь появятся ваши привычки", style = TextStyle(color = WidgetColors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold))
+            Spacer(GlanceModifier.height(10.dp))
+            Box(
+                modifier = GlanceModifier.cornerRadius(999.dp).background(WidgetColors.accentSoft).padding(horizontal = 14.dp, vertical = 8.dp)
+                    .clickable(deeplinkAction(context, Deeplinks.TEMPLATES)),
+            ) { Text("Выбрать шаблон", style = TextStyle(color = WidgetColors.accent, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)) }
         }
-    }
-}
-
-class ToggleHabitAction : ActionCallback {
-    override suspend fun onAction(
-        context: Context,
-        glanceId: GlanceId,
-        parameters: ActionParameters
-    ) {
-        val habitId = parameters[habitIdKey] ?: return
-        val completed = parameters[completedKey] ?: return
-        WidgetDataLoader.toggle(habitId, completed)
-        // Обновляем оба виджета (каждый независимо)
-        WidgetDataLoader.refreshAll(context)
-    }
-
-    companion object {
-        val habitIdKey = ActionParameters.Key<String>("habitId")
-        val completedKey = ActionParameters.Key<Boolean>("completed")
     }
 }
 

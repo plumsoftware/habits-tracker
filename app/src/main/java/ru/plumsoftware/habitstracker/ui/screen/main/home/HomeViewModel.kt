@@ -763,6 +763,7 @@ class HomeViewModel(
                 )
                 // После добавления привычки перезагружаем список для текущей даты
                 loadHabitsForDate(state.value.selectedDate)
+                refreshWidgets()
             } catch (e: Exception) {
                 Log.e(
                     "HomeViewModel",
@@ -789,6 +790,7 @@ class HomeViewModel(
                 Log.d("HomeViewModel", "Привычка '${habit.title}' успешно обновлена")
                 // После обновления привычки перезагружаем список для текущей даты
                 loadHabitsForDate(state.value.selectedDate)
+                refreshWidgets()
             } catch (e: Exception) {
                 Log.e(
                     "HomeViewModel",
@@ -818,6 +820,7 @@ class HomeViewModel(
                 }
                 // После удаления привычки перезагружаем список для текущей даты
                 loadHabitsForDate(state.value.selectedDate)
+                refreshWidgets()
             } catch (e: Exception) {
                 Log.e("HomeViewModel", "Ошибка удаления привычки '${habit.title}': ${e.message}", e)
                 _state.update {

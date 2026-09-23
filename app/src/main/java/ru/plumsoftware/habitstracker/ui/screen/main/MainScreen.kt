@@ -51,7 +51,9 @@ import java.util.Calendar
 @Composable
 fun HomeScreen(
     settingsViewModel: SettingsViewModel,
-    isDarkTheme: Boolean
+    isDarkTheme: Boolean,
+    deeplink: String? = null,
+    onDeeplinkHandled: () -> Unit = {},
 ) {
     val viewModel: HomeViewModel = koinViewModel()
     val state by viewModel.state.collectAsState()
@@ -80,6 +82,27 @@ fun HomeScreen(
 
     val activity = LocalActivity.current
     val context = LocalContext.current
+
+    // Deeplink из виджетов (habits://...)
+    LaunchedEffect(deeplink, state.allHabits) {
+        val link = deeplink ?: return@LaunchedEffect
+        when {
+            link.startsWith("habits://today") -> viewModel.onEvent(HomeEvent.OnHome)
+            link.startsWith("habits://analytics") -> viewModel.onEvent(HomeEvent.OnStatistic)
+            link.startsWith("habits://templates") -> showTemplates = true
+            link.startsWith("habits://habit/new") -> { formHabit = null; showForm = true }
+            link.startsWith("habits://habit/") -> {
+                val id = link.substringAfterLast('/')
+                val habit = state.allHabits.firstOrNull { it.id == id }
+                if (habit != null) {
+                    detailHabit = habit
+                    viewModel.onEvent(HomeEvent.LoadHabitDetail(habit.id))
+                } else viewModel.onEvent(HomeEvent.OnHome)
+            }
+            else -> viewModel.onEvent(HomeEvent.OnHome)
+        }
+        onDeeplinkHandled()
+    }
 
     LaunchedEffect(state.showOpenAds) {
         if (state.showOpenAds) {

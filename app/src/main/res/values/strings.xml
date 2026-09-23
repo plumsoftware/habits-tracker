@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">Трекер привычек</string>
+
+    <string name="widget_desc_progress">Кольцо выполнения за сегодня</string>
+    <string name="widget_desc_streak">Дни подряд и текущая неделя</string>
+    <string name="widget_desc_today">Список с отметкой прямо с рабочего стола</string>
+    <string name="widget_desc_quick">До 5 привычек в одну строку</string>
 </resources>
