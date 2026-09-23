@@ -8,17 +8,18 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
+import androidx.compose.ui.Modifier
 import org.koin.androidx.compose.koinViewModel
 import ru.plumsoftware.habitstracker.data.settings.ThemeMode
-import ru.plumsoftware.habitstracker.ui.screen.Route
 import ru.plumsoftware.habitstracker.ui.screen.main.HomeScreen
+import ru.plumsoftware.habitstracker.ui.screen.onboarding.OnboardingScreen
 import ru.plumsoftware.habitstracker.ui.screen.main.settings.SettingsViewModel
 import ru.plumsoftware.habitstracker.ui.theme.AppTheme
 
@@ -34,26 +35,19 @@ class MainActivity : ComponentActivity() {
         }
 
         enableEdgeToEdge()
+        // Системные бары прозрачные — под них попадает фон приложения (edge-to-edge)
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
         setContent {
-            // Запрос разрешений на хранилище (и уведомления) при запуске
-            val permissionLauncher = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.RequestMultiplePermissions()
-            ) { /* результат не критичен */ }
-            LaunchedEffect(Unit) {
-                val permissions = buildList {
-                    add(Manifest.permission.READ_EXTERNAL_STORAGE)
-                    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-                        add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                    }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        add(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                }
-                permissionLauncher.launch(permissions.toTypedArray())
-            }
+            // Разрешения НЕ запрашиваем на старте — только на экране разрешений в онбординге
+            // (ТЗ §14.1), иначе системный диалог всплывает до того, как пользователь туда дошёл.
 
             val settingsViewModel: SettingsViewModel = koinViewModel()
             val settings by settingsViewModel.settings.collectAsState()
+            val onboardingSeen by settingsViewModel.onboardingSeen.collectAsState()
             val isDarkTheme = when (settings.themeMode) {
                 ThemeMode.LIGHT -> false
                 ThemeMode.DARK -> true
@@ -63,20 +57,28 @@ class MainActivity : ComponentActivity() {
             AppTheme(
                 darkTheme = isDarkTheme
             ) {
-                val navHost = rememberNavController()
-                NavHost(
-                    navController = navHost,
-                    startDestination = Route.Main
-                ) {
-                    composable<Route.Main> {
-                        HomeScreen(
-                            settingsViewModel = settingsViewModel,
-                            isDarkTheme = isDarkTheme
-                        )
-                    }
+                // ТЗ §14: первый запуск — онбординг, далее — «Сегодня».
+                // null = флаг ещё не прочитан из DataStore → короткий сплэш вместо мигания.
+                when (onboardingSeen) {
+                    null -> SplashBackground()
+                    false -> OnboardingScreen(onFinish = { settingsViewModel.completeOnboarding() })
+                    true -> HomeScreen(
+                        settingsViewModel = settingsViewModel,
+                        isDarkTheme = isDarkTheme
+                    )
                 }
             }
         }
     }
+}
+
+/** Короткий фон-сплэш, пока читается флаг онбординга из DataStore. */
+@Composable
+private fun SplashBackground() {
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(AppTheme.colors.bgScreen)
+    )
 }
 

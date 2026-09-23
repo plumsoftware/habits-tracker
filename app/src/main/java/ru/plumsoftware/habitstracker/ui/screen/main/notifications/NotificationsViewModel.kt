@@ -62,6 +62,12 @@ class NotificationsViewModel(
                     notificationRepository.markAllRead()
                 }
             }
+
+            is NotificationEvent.OnDelete -> {
+                viewModelScope.launch {
+                    notificationRepository.delete(event.notif)
+                }
+            }
         }
     }
 

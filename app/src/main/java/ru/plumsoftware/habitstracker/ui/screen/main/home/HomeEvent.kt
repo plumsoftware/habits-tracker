@@ -14,7 +14,14 @@ sealed interface HomeEvent {
     data class MarkHabitCompleted(val habitId: String) : HomeEvent
     data class UnmarkHabitCompleted(val habitId: String) : HomeEvent
 
+    data class LoadHabitDetail(val habitId: String) : HomeEvent
+    data object ClearHabitDetail : HomeEvent
+
+    data class ArchiveHabit(val habitId: String) : HomeEvent
+    data class UnarchiveHabit(val habitId: String) : HomeEvent
+
     data object OnHome: HomeEvent
+    data object OnCalendar: HomeEvent
     data object OnStatistic: HomeEvent
     data object OnSettings: HomeEvent
     data object OnNotifications: HomeEvent

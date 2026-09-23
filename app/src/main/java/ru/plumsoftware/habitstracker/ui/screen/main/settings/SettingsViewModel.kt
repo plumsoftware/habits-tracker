@@ -21,6 +21,11 @@ class SettingsViewModel(
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
 
+    // null = ещё не прочитано из DataStore (показываем сплэш, а не мигаем онбордингом)
+    val onboardingSeen: StateFlow<Boolean?> = settingsRepository.settings
+        .map { it.onboardingSeen }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     // Совместимость: используется на других экранах (тёмная тема как булево)
     val isDarkTheme: StateFlow<Boolean> = settingsRepository.settings
         .map { it.themeMode == ThemeMode.DARK }
@@ -44,6 +49,32 @@ class SettingsViewModel(
 
     fun setWeekStart(weekStart: WeekStart) = viewModelScope.launch {
         settingsRepository.setWeekStart(weekStart)
+    }
+
+    fun setQuietHoursEnabled(value: Boolean) = viewModelScope.launch {
+        settingsRepository.setQuietHoursEnabled(value)
+    }
+
+    fun setQuietHours(start: Int, end: Int) = viewModelScope.launch {
+        settingsRepository.setQuietHours(start, end)
+    }
+
+    fun setStreakFreezesPerWeek(value: Int) = viewModelScope.launch {
+        settingsRepository.setStreakFreezesPerWeek(value)
+    }
+
+    fun setWeeklyGoalDays(value: Int) = viewModelScope.launch {
+        settingsRepository.setWeeklyGoalDays(value)
+    }
+
+    /** Онбординг пройден (ТЗ §14) — при последующих запусках сразу главный экран. */
+    fun completeOnboarding() = viewModelScope.launch {
+        settingsRepository.setOnboardingSeen(true)
+    }
+
+    /** Показать онбординг снова (кнопка в настройках, ТЗ §11.4) — данные не трогаем. */
+    fun resetOnboarding() = viewModelScope.launch {
+        settingsRepository.setOnboardingSeen(false)
     }
 
     /** Быстрое переключение свет/тьма (для обратной совместимости). */

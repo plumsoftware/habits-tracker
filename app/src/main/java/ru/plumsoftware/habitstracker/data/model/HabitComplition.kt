@@ -21,5 +21,7 @@ data class HabitCompletion(
     val habitId: String,
     val completionDate: Long, // Дата выполнения (начало дня в timestamp)
     val completed: Boolean = false,
-    val completedCount: Int = 0 // Если нужно учитывать количество
+    val completedCount: Int = 0, // Если нужно учитывать количество
+    // Момент отметки (время устройства) — для достижений «утро/вечер». 0 = неизвестно.
+    val completedAtMillis: Long = 0
 )

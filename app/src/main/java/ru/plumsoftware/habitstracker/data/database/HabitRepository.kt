@@ -46,6 +46,9 @@ class HabitRepository(
             }
     }
 
+    /** Публичная обёртка: активна ли привычка на дату (для расчёта заморозок). */
+    fun isActiveOn(habit: Habit, date: Long): Boolean = isHabitActiveOnDate(habit, date)
+
     private fun isHabitActiveOnDate(habit: Habit, targetDate: Long): Boolean {
         val startOfTargetDay = getStartOfDay(targetDate)
         val startOfCreationDay = getStartOfDay(habit.creationDate)
@@ -54,6 +57,13 @@ class HabitRepository(
         if (startOfTargetDay < startOfCreationDay) {
             Log.d("HabitRepository", "Привычка ${habit.title} не активна - дата создания в будущем")
             return false
+        }
+
+        // Режим «По дням недели» (ТЗ §7.3): активна только в выбранные дни
+        if (habit.isByWeekdays) {
+            val dow = java.util.Calendar.getInstance().apply { timeInMillis = startOfTargetDay }
+                .get(java.util.Calendar.DAY_OF_WEEK)
+            return habit.weekdaySet.contains(dow)
         }
 
         // Проверяем периодичность
@@ -137,25 +147,102 @@ class HabitRepository(
         val startOfDay = getStartOfDay(date)
 
         val existingCompletion = habitCompletionDao.getCompletion(habitId, startOfDay)
+        // Цель в день (ТЗ §4.5/§7.3г): «выполнено» только когда набрано targetCount отметок
+        val goal = (habitDao.getHabitById(habitId)?.targetCount ?: 1).coerceAtLeast(1)
 
         if (existingCompletion != null) {
-            // Обновляем существующую запись
+            val newCount = (existingCompletion.completedCount + 1).coerceAtMost(goal)
             val updatedCompletion = existingCompletion.copy(
-                completed = true,
-                completedCount = existingCompletion.completedCount + 1
+                completed = newCount >= goal,
+                completedCount = newCount,
+                completedAtMillis = System.currentTimeMillis()
             )
             habitCompletionDao.updateCompletion(updatedCompletion)
         } else {
-            // Создаем новую запись
             val completion = HabitCompletion(
                 id = UUID.randomUUID().toString(),
                 habitId = habitId,
                 completionDate = startOfDay,
-                completed = true,
-                completedCount = 1
+                completed = 1 >= goal,
+                completedCount = 1,
+                completedAtMillis = System.currentTimeMillis()
             )
             habitCompletionDao.insertCompletion(completion)
         }
+
+        // ТЗ §7.4.1 п.4: при закрытии родителя — сразу уведомить связанных потомков.
+        // Только когда отмечаем сегодняшний день и привычка действительно закрыта (цель достигнута).
+        val nowClosed = habitCompletionDao.getCompletion(habitId, startOfDay)?.completed == true
+        if (nowClosed && getStartOfDay(date) == getStartOfDay(System.currentTimeMillis())) {
+            runCatching {
+                val parent = habitDao.getHabitById(habitId)
+                val children = habitDao.getAllHabits().first().filter { it.chainedAfterId == habitId }
+                children.forEach { child ->
+                    habitNotificationManager.notifyChainNext(child, parent?.title ?: "")
+                }
+            }
+        }
+    }
+
+    /**
+     * Сколько привычек сегодня ещё не закрыты и имеют серию ≥ 3 (ТЗ §16 «серия под угрозой»).
+     */
+    /** Архивные привычки (ТЗ §11.3). */
+    fun getArchivedHabits(): Flow<List<Habit>> = habitDao.getArchivedHabits()
+
+    /** Архивирует привычку: скрывает из активных списков и отменяет её напоминания. */
+    suspend fun archiveHabit(id: String) {
+        habitDao.setArchived(id, true)
+        habitNotificationManager.cancelHabitNotification(id)
+    }
+
+    /** Возвращает привычку из архива и заново планирует напоминания. */
+    suspend fun unarchiveHabit(id: String) {
+        habitDao.setArchived(id, false)
+        habitDao.getHabitById(id)?.let { habitNotificationManager.scheduleHabitNotification(it) }
+    }
+
+    /** Полностью удаляет все привычки и их отметки (ТЗ §11.3 «Удалить все данные»). */
+    suspend fun wipeAllHabits() {
+        val habits = habitDao.getAllHabits().first()
+        habits.forEach { habitNotificationManager.cancelHabitNotification(it.id) }
+        habitDao.deleteAllHabits()
+    }
+
+    /** Все привычки (включая архивные) — для JSON-бэкапа. */
+    suspend fun getAllHabitsRaw(): List<Habit> = habitDao.getAllRaw()
+
+    /** Все отметки — для JSON-бэкапа. */
+    suspend fun getAllCompletionsRaw(): List<HabitCompletion> = habitCompletionDao.getAllRaw()
+
+    /** Восстанавливает данные из бэкапа: очищает и вставляет привычки и отметки. */
+    suspend fun restore(habits: List<Habit>, completions: List<HabitCompletion>) {
+        habitDao.deleteAllHabits() // отметки удалятся каскадом
+        habits.forEach { habitDao.insertHabit(it) }
+        completions.forEach { habitCompletionDao.insertCompletion(it) }
+        habits.filter { !it.archived }.forEach { habitNotificationManager.scheduleHabitNotification(it) }
+    }
+
+    suspend fun habitsAtRiskCountToday(): Int {
+        val dayMs = 24 * 60 * 60 * 1000L
+        val today = getStartOfDay(System.currentTimeMillis())
+        val habits = habitDao.getAllHabits().first()
+        var count = 0
+        for (h in habits) {
+            if (!isHabitActiveOnDate(h, today)) continue
+            val comp = habitCompletionDao.getCompletion(h.id, today)
+            if (comp?.completed == true) continue
+            // Серия, заканчивающаяся вчера
+            val days = habitCompletionDao.getAllCompletionsForHabit(h.id)
+                .filter { it.completed }
+                .map { getStartOfDay(it.completionDate) }
+                .toSet()
+            var cursor = today - dayMs
+            var streak = 0
+            while (days.contains(cursor)) { streak++; cursor -= dayMs }
+            if (streak >= 3) count++
+        }
+        return count
     }
 
     private fun getPeriodForHabit(habit: Habit, date: Long): Pair<Long, Long> {

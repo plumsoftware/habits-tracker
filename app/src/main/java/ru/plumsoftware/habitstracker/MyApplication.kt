@@ -56,6 +56,13 @@ class MyApplication : Application() {
                 )
             )
         }
+
+        // ТЗ §16: ежедневная проверка «серия под угрозой» в 20:00
+        runCatching {
+            org.koin.core.context.GlobalContext.get()
+                .get<ru.plumsoftware.habitstracker.data.notification.HabitNotificationManager>()
+                .scheduleSeriesRiskCheck()
+        }
     }
 
     companion object {

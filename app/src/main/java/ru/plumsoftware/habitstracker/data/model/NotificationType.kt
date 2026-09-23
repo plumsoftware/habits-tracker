@@ -16,6 +16,7 @@ enum class NotificationType {
     STREAK,
     WEEKLY_REPORT,
     PUSH,
+    FREEZE,
     GENERAL;
 
     companion object {

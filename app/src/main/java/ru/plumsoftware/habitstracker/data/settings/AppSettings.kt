@@ -36,7 +36,17 @@ data class AppSettings(
     val pushEnabled: Boolean = true,
     val soundEnabled: Boolean = true,
     val seriesEnabled: Boolean = true,
+    val quietHoursEnabled: Boolean = false,
+    // Интервал тихих часов (час начала/конца), ТЗ §11.2
+    val quietStartHour: Int = 23,
+    val quietEndHour: Int = 8,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val weekStart: WeekStart = WeekStart.MONDAY,
-    val language: AppLanguage = AppLanguage.RU
+    val language: AppLanguage = AppLanguage.RU,
+    // Кол-во заморозок стрика в неделю (0..3), строка «Заморозки стрика» (ТЗ §11.3)
+    val streakFreezesPerWeek: Int = 2,
+    // Сколько дней в неделю считается «успешной неделей» (1..7), строка «Цель по дням»
+    val weeklyGoalDays: Int = 5,
+    // Показан ли онбординг (ТЗ §14: при первом запуске — онбординг, далее — главный)
+    val onboardingSeen: Boolean = false
 )

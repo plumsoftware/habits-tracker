@@ -34,12 +34,24 @@ class HomeViewModel(
     val state: StateFlow<HomeState> = _state
 
     init {
-        loadHabits()
+        // Только initDate() → loadHabitsForDate(): один активный сбор Flow.
+        // (раньше здесь дублировался loadHabits(), из-за чего на каждую отметку
+        //  состояние обновлялось дважды и список «перезапускался».)
         initDate()
 
         recordAppLaunch()
         observeWeekStart()
         observeCategories()
+        observeAllHabits()
+        observeArchivedHabits()
+    }
+
+    private fun observeArchivedHabits() {
+        viewModelScope.launch {
+            repository.getArchivedHabits().collect { habits ->
+                _state.update { it.copy(archivedHabits = habits) }
+            }
+        }
     }
 
     // Держим список категорий в состоянии актуальным
@@ -47,6 +59,15 @@ class HomeViewModel(
         viewModelScope.launch {
             categoryRepository.getAll().collect { categories ->
                 _state.update { it.copy(categories = categories) }
+            }
+        }
+    }
+
+    // Полный список привычек — для фильтра в календаре и других экранов
+    private fun observeAllHabits() {
+        viewModelScope.launch {
+            repository.getAllHabits().collect { habits ->
+                _state.update { it.copy(allHabits = habits) }
             }
         }
     }
@@ -68,7 +89,7 @@ class HomeViewModel(
 
     fun onEvent(event: HomeEvent) {
         when (event) {
-            is HomeEvent.LoadHabits -> loadHabits(isFirstTime = false)
+            is HomeEvent.LoadHabits -> loadHabitsForDate(state.value.selectedDate, isFirstTime = false)
             is HomeEvent.AddHabit -> addHabit(event.habit)
             is HomeEvent.UpdateHabit -> updateHabit(event.habit)
             is HomeEvent.DeleteHabit -> deleteHabit(event.habit)
@@ -77,7 +98,18 @@ class HomeViewModel(
             is HomeEvent.SelectDate -> selectDate(event.date)
             is HomeEvent.MarkHabitCompleted -> markHabitCompleted(event.habitId)
             is HomeEvent.UnmarkHabitCompleted -> unmarkHabitCompleted(event.habitId)
+            is HomeEvent.LoadHabitDetail -> loadHabitDetail(event.habitId)
+            HomeEvent.ClearHabitDetail -> _state.update { it.copy(habitDetail = null) }
+            is HomeEvent.ArchiveHabit -> viewModelScope.launch {
+                repository.archiveHabit(event.habitId)
+                loadHabitsForDate(state.value.selectedDate)
+            }
+            is HomeEvent.UnarchiveHabit -> viewModelScope.launch {
+                repository.unarchiveHabit(event.habitId)
+                loadHabitsForDate(state.value.selectedDate)
+            }
             HomeEvent.OnHome -> onMainScreenStateChange(MainScreenStates.Home)
+            HomeEvent.OnCalendar -> onMainScreenStateChange(MainScreenStates.Calendar)
             HomeEvent.OnNotifications -> onMainScreenStateChange(MainScreenStates.Notifications)
             HomeEvent.OnSettings -> onMainScreenStateChange(MainScreenStates.Settings)
             HomeEvent.OnStatistic -> onMainScreenStateChange(MainScreenStates.Statistics)
@@ -287,6 +319,78 @@ class HomeViewModel(
         }
     }
 
+    /** Считает детальную статистику привычки для экрана §8. */
+    private fun loadHabitDetail(habitId: String) {
+        viewModelScope.launch {
+            try {
+                val completions = repository.habitCompletionDao.getAllCompletionsForHabit(habitId)
+                val habit = repository.getHabitById(habitId)
+                val dayMs = 24 * 60 * 60 * 1000L
+                val today = startOfDayMillis(System.currentTimeMillis())
+                val completedDays = completions.filter { it.completed }
+                    .map { startOfDayMillis(it.completionDate) }
+                    .toSortedSet()
+
+                // Текущая серия (заканчивается сегодня или вчера); заморозки — из общего пула
+                val startCursor = if (completedDays.contains(today)) today else today - dayMs
+                val (granted, _) = computeGlobalFreezes()
+                val frozenDays = granted[habitId] ?: emptySet()
+                val currentStreak = streakWith(completedDays, startCursor, frozenDays)
+
+                // Лучшая серия
+                var bestStreak = 0
+                var run = 0
+                var prev: Long? = null
+                for (d in completedDays) {
+                    run = if (prev != null && d - prev == dayMs) run + 1 else 1
+                    if (run > bestStreak) bestStreak = run
+                    prev = d
+                }
+
+                val totalChecks = completedDays.size
+                val start = startOfDayMillis(habit?.creationDate ?: (today - 29 * dayMs))
+                val totalDays = (((today - start) / dayMs) + 1).toInt().coerceAtLeast(1)
+                val successRate = (totalChecks * 100 / totalDays).coerceIn(0, 100)
+                val missedDays = (totalDays - totalChecks).coerceAtLeast(0)
+
+                // Тепловая карта: последние 126 дней
+                val heat = mutableMapOf<Long, Int>()
+                for (i in 0 until 126) {
+                    val d = today - i * dayMs
+                    heat[d] = if (completedDays.contains(d)) 1 else 0
+                }
+
+                // По дням недели (пн..вс)
+                val weekday = IntArray(7)
+                val cal = Calendar.getInstance()
+                completedDays.forEach { d ->
+                    cal.timeInMillis = d
+                    val idx = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7 // пн=0..вс=6
+                    weekday[idx]++
+                }
+
+                _state.update {
+                    it.copy(
+                        habitDetail = HabitDetail(
+                            habitId = habitId,
+                            currentStreak = currentStreak,
+                            bestStreak = bestStreak,
+                            totalChecks = totalChecks,
+                            successRate = successRate,
+                            missedDays = missedDays,
+                            doneToday = completedDays.contains(today),
+                            heatmap = heat,
+                            frozenDays = frozenDays,
+                            weekdayCounts = weekday.toList(),
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "Ошибка расчёта деталей: ${e.message}", e)
+            }
+        }
+    }
+
     /** Длина серии подряд выполненных дней, заканчивающейся выбранной датой. */
     private suspend fun calculateStreak(habitId: String): Int {
         val completions = repository.habitCompletionDao.getAllCompletionsForHabit(habitId)
@@ -295,14 +399,226 @@ class HomeViewModel(
             .map { startOfDayMillis(it.completionDate) }
             .toSet()
 
+        val (granted, _) = computeGlobalFreezes()
+        return streakWith(completedDays, startOfDayMillis(state.value.selectedDate), granted[habitId] ?: emptySet())
+    }
+
+    /**
+     * Длина серии, заканчивающейся [startCursor], идя назад по дням.
+     * Пропущенный день не рвёт серию (но и не увеличивает счёт), только если он есть
+     * в [frozen] — множестве дней, «оплаченных» из общего пула заморозок (ТЗ §7.4.2).
+     */
+    private fun streakWith(days: Set<Long>, startCursor: Long, frozen: Set<Long>): Int {
         val dayMs = 24 * 60 * 60 * 1000L
-        var cursor = startOfDayMillis(state.value.selectedDate)
+        var cursor = startCursor
         var streak = 0
-        while (completedDays.contains(cursor)) {
-            streak++
-            cursor -= dayMs
+        while (true) {
+            when {
+                days.contains(cursor) -> { streak++; cursor -= dayMs }
+                frozen.contains(cursor) -> { cursor -= dayMs }
+                else -> return streak
+            }
         }
-        return streak
+    }
+
+    /**
+     * Строгий общий пул заморозок (ТЗ §7.4.2): не более [AppSettings.streakFreezesPerWeek]
+     * заморозок в неделю на ВСЕ привычки. Возвращает карту habitId -> набор замороженных дней
+     * и объединение всех замороженных дней (для календаря/счётчика).
+     * Кандидат на заморозку — пропущенный запланированный день привычки с freeze,
+     * у которой есть отметка позднее этого дня (пропуск «внутри» серии). Окно — 120 дней.
+     */
+    private suspend fun computeGlobalFreezes(): Pair<Map<String, Set<Long>>, Set<Long>> {
+        val max = settingsRepository.current().streakFreezesPerWeek
+        if (max <= 0) return emptyMap<String, Set<Long>>() to emptySet()
+        val dayMs = 24 * 60 * 60 * 1000L
+        val today = startOfDayMillis(System.currentTimeMillis())
+        val windowStart = today - 120 * dayMs
+        val firstDow = when (settingsRepository.current().weekStart) {
+            ru.plumsoftware.habitstracker.data.settings.WeekStart.SUNDAY -> Calendar.SUNDAY
+            else -> Calendar.MONDAY
+        }
+        val habits = repository.getAllHabits().first().filter { it.freezeEnabled }
+
+        data class Cand(val habitId: String, val day: Long)
+        val candidates = mutableListOf<Cand>()
+        for (h in habits) {
+            val completed = repository.habitCompletionDao.getAllCompletionsForHabit(h.id)
+                .filter { it.completed }
+                .map { startOfDayMillis(it.completionDate) }
+                .toSet()
+            val latest = completed.maxOrNull() ?: continue
+            var d = windowStart
+            while (d < today) {
+                if (d !in completed && d < latest && repository.isActiveOn(h, d)) {
+                    candidates.add(Cand(h.id, d))
+                }
+                d += dayMs
+            }
+        }
+
+        val granted = HashMap<String, MutableSet<Long>>()
+        val union = mutableSetOf<Long>()
+        candidates.groupBy { weekKey(it.day, firstDow) }.forEach { (_, list) ->
+            list.sortedBy { it.day }.take(max).forEach { c ->
+                granted.getOrPut(c.habitId) { mutableSetOf() }.add(c.day)
+                union.add(c.day)
+            }
+        }
+        return granted to union
+    }
+
+    /**
+     * Достижения (ТЗ §10.6). Считаются из реальных данных: серии, суммарные отметки,
+     * «Идеальная неделя» (все запланированные привычки закрыты каждый день недели).
+     * «30 утр» и «1000 страниц» не считаем — нет времени выполнения и счётчика страниц.
+     */
+    private suspend fun computeAchievements(overallStreak: Int): List<Achievement> {
+        val dayMs = 24 * 60 * 60 * 1000L
+        val today = startOfDayMillis(System.currentTimeMillis())
+        val habits = repository.getAllHabits().first()
+        val completedByHabit = HashMap<String, Set<Long>>()
+        var totalChecks = 0
+        var morningChecks = 0
+        var eveningChecks = 0
+        for (h in habits) {
+            val completions = repository.habitCompletionDao.getAllCompletionsForHabit(h.id).filter { it.completed }
+            completedByHabit[h.id] = completions.map { startOfDayMillis(it.completionDate) }.toSet()
+            totalChecks += completedByHabit[h.id]!!.size
+            // Час отметки по времени устройства: «утро» < 12:00, «вечер» ≥ 18:00
+            completions.forEach { c ->
+                if (c.completedAtMillis > 0) {
+                    val hour = Calendar.getInstance().apply { timeInMillis = c.completedAtMillis }.get(Calendar.HOUR_OF_DAY)
+                    if (hour < 12) morningChecks++ else if (hour >= 18) eveningChecks++
+                }
+            }
+        }
+
+        // Идеальная неделя: за последние 12 недель есть неделя, где каждый запланированный
+        // день каждой привычки закрыт (и была хотя бы одна запланированная привычка).
+        var perfectWeek = false
+        run {
+            var weekEnd = today
+            repeat(12) {
+                var anyScheduled = false
+                var allDone = true
+                for (i in 0 until 7) {
+                    val d = weekEnd - i * dayMs
+                    if (d > today) continue
+                    val scheduled = habits.filter { repository.isActiveOn(it, d) }
+                    if (scheduled.isNotEmpty()) {
+                        anyScheduled = true
+                        if (scheduled.any { completedByHabit[it.id]?.contains(d) != true }) { allDone = false; break }
+                    }
+                }
+                if (anyScheduled && allDone) { perfectWeek = true; return@run }
+                weekEnd -= 7 * dayMs
+            }
+        }
+
+        // Успешная неделя (ТЗ §11.3): неделя, где набрано ≥ weeklyGoalDays «идеальных» дней
+        // (день = все запланированные привычки закрыты). Порог берём из настроек.
+        val settings = settingsRepository.current()
+        val weeklyGoal = settings.weeklyGoalDays.coerceIn(1, 7)
+        val firstDow = if (settings.weekStart == ru.plumsoftware.habitstracker.data.settings.WeekStart.SUNDAY)
+            Calendar.SUNDAY else Calendar.MONDAY
+
+        fun isGoodDay(d: Long): Boolean {
+            if (d > today) return false
+            val scheduled = habits.filter { repository.isActiveOn(it, d) }
+            return scheduled.isNotEmpty() && scheduled.all { completedByHabit[it.id]?.contains(d) == true }
+        }
+        // Начало текущей недели
+        val weekStartCal = Calendar.getInstance().apply {
+            timeInMillis = today; this.firstDayOfWeek = firstDow
+        }
+        while (weekStartCal.get(Calendar.DAY_OF_WEEK) != firstDow) weekStartCal.add(Calendar.DAY_OF_MONTH, -1)
+        var currentWeekGood = 0
+        run {
+            var d = startOfDayMillis(weekStartCal.timeInMillis)
+            while (d <= today) { if (isGoodDay(d)) currentWeekGood++; d += dayMs }
+        }
+        var successfulWeek = currentWeekGood >= weeklyGoal
+        if (!successfulWeek) {
+            var weekEnd = today - 7 * dayMs
+            repeat(12) {
+                var good = 0
+                for (i in 0 until 7) if (isGoodDay(weekEnd - i * dayMs)) good++
+                if (good >= weeklyGoal) { successfulWeek = true; return@repeat }
+                weekEnd -= 7 * dayMs
+            }
+        }
+
+        fun streakAch(emoji: String, title: String, target: Int) = Achievement(
+            emoji, title,
+            if (overallStreak >= target) "получено" else "ещё ${target - overallStreak}",
+            overallStreak >= target,
+        )
+        fun checksAch(emoji: String, title: String, target: Int) = Achievement(
+            emoji, title,
+            if (totalChecks >= target) "получено" else "ещё ${target - totalChecks}",
+            totalChecks >= target,
+        )
+
+        return listOf(
+            Achievement("🌱", "Первый шаг", if (totalChecks >= 1) "получено" else "отметьте привычку", totalChecks >= 1),
+            streakAch("🔥", "7 дней", 7),
+            streakAch("🏆", "30 дней", 30),
+            streakAch("💎", "100 дней", 100),
+            Achievement("⚡️", "Идеальная неделя", if (perfectWeek) "получено" else "закройте все за неделю", perfectWeek),
+            Achievement(
+                "🎖", "Успешная неделя",
+                if (successfulWeek) "получено" else "$currentWeekGood/$weeklyGoal дней",
+                successfulWeek,
+            ),
+            Achievement("🌅", "Ранняя пташка", if (morningChecks >= 30) "получено" else "ещё ${30 - morningChecks} утром", morningChecks >= 30),
+            Achievement("🌙", "Сова", if (eveningChecks >= 30) "получено" else "ещё ${30 - eveningChecks} вечером", eveningChecks >= 30),
+            checksAch("✅", "100 отметок", 100),
+            checksAch("🎯", "500 отметок", 500),
+        )
+    }
+
+    private fun weekKey(dayMillis: Long, firstDow: Int): Int {
+        val cal = Calendar.getInstance().apply {
+            timeInMillis = dayMillis
+            firstDayOfWeek = firstDow
+            minimalDaysInFirstWeek = 4
+        }
+        return cal.get(Calendar.YEAR) * 100 + cal.get(Calendar.WEEK_OF_YEAR)
+    }
+
+    /** Наборы дней выполнения по каждой активной привычке — для бинарного календаря §5.2. */
+    private suspend fun computeCompletionDays(): Map<String, Set<Long>> {
+        val habits = repository.getAllHabits().first()
+        val map = HashMap<String, Set<Long>>()
+        for (h in habits) {
+            map[h.id] = repository.habitCompletionDao.getAllCompletionsForHabit(h.id)
+                .filter { it.completed }
+                .map { startOfDayMillis(it.completionDate) }
+                .toSet()
+        }
+        return map
+    }
+
+    private suspend fun notifyNewFreezes(frozen: Set<Long>, today: Long, dayMs: Long) {
+        try {
+            val notified = settingsRepository.notifiedFrozenDays()
+            // Уведомляем только о недавних (за последние 2 дня) и ещё не отмеченных заморозках
+            val fresh = frozen.filter { it >= today - 2 * dayMs && it !in notified }
+            if (fresh.isNotEmpty()) {
+                fresh.forEach {
+                    notificationRepository.add(
+                        title = "Заморозка использована",
+                        body = "Пропуск закрыт заморозкой — серия сохранена",
+                        type = NotificationType.FREEZE,
+                        resourceUrl = ""
+                    )
+                }
+                settingsRepository.setNotifiedFrozenDays(notified + frozen)
+            }
+        } catch (e: Exception) {
+            Log.e("HomeViewModel", "Ошибка уведомления о заморозке: ${e.message}", e)
+        }
     }
 
     private fun startOfDayMillis(timestamp: Long): Long {
@@ -332,20 +648,14 @@ class HomeViewModel(
         endDate: Long
     ): Map<String, Int> {
         val result = mutableMapOf<String, Int>()
-        val dayMs = 24 * 60 * 60 * 1000L
         val end = startOfDayMillis(endDate)
+        val (granted, _) = computeGlobalFreezes()
         for (hs in habits) {
             val completions = repository.habitCompletionDao.getAllCompletionsForHabit(hs.habit.id)
             val days = completions.filter { it.completed }
                 .map { startOfDayMillis(it.completionDate) }
                 .toSet()
-            var cursor = end
-            var streak = 0
-            while (days.contains(cursor)) {
-                streak++
-                cursor -= dayMs
-            }
-            result[hs.habit.id] = streak
+            result[hs.habit.id] = streakWith(days, end, granted[hs.habit.id] ?: emptySet())
         }
         return result
     }
@@ -572,8 +882,12 @@ class HomeViewModel(
             ))
     }
 
+    // Активный сбор Flow привычек — чтобы не копить коллекторы при повторных вызовах
+    private var loadJob: kotlinx.coroutines.Job? = null
+
     private fun loadHabitsForDate(date: Long, isFirstTime: Boolean = true) {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             _state.update { it.copy(isLoading = true) }
 
             try {
@@ -605,6 +919,10 @@ class HomeViewModel(
                     val heatmap = loadHeatmap(date)
                     val correlations = computeCorrelations()
                     val patternsUnlocked = isPatternsUnlocked()
+                    val (frozenByHabit, frozenDays) = computeGlobalFreezes()
+                    notifyNewFreezes(frozenDays, startOfDayMillis(System.currentTimeMillis()), 24 * 60 * 60 * 1000L)
+                    val completionDays = computeCompletionDays()
+                    val achievements = computeAchievements(overallStreak)
 
                     if (isFirstTime) {
                         _state.update {
@@ -620,6 +938,10 @@ class HomeViewModel(
                                 habitStreaks = habitStreaks,
                                 overallStreak = overallStreak,
                                 heatmap = heatmap,
+                                frozenDays = frozenDays,
+                                habitCompletionDays = completionDays,
+                                frozenByHabit = frozenByHabit,
+                                achievements = achievements,
                                 correlations = correlations,
                                 patternsUnlocked = patternsUnlocked
                             )
@@ -636,7 +958,11 @@ class HomeViewModel(
                                 firstDayOfWeek = firstDayOfWeek,
                                 habitStreaks = habitStreaks,
                                 overallStreak = overallStreak,
+                                frozenDays = frozenDays,
                                 heatmap = heatmap,
+                                habitCompletionDays = completionDays,
+                                frozenByHabit = frozenByHabit,
+                                achievements = achievements,
                                 correlations = correlations,
                                 patternsUnlocked = patternsUnlocked
                             )

@@ -27,12 +27,26 @@ data class HomeState(
     val showOpenAds: Boolean = false,
     // Категории (встроенные + пользовательские), отсортированы
     val categories: List<Category> = emptyList(),
+    // Все активные привычки (для фильтра в календаре и т.п.)
+    val allHabits: List<Habit> = emptyList(),
+    // Архивные привычки (ТЗ §11.3)
+    val archivedHabits: List<Habit> = emptyList(),
+    // Детали выбранной привычки (экран §8), null = экран закрыт
+    val habitDetail: HabitDetail? = null,
     // Текущая серия (стрик) по каждой привычке: habitId -> количество дней подряд
     val habitStreaks: Map<String, Int> = emptyMap(),
     // Общая серия дней активности (подряд дни с ≥1 выполнением) — для достижений
     val overallStreak: Int = 0,
     // Тепловая карта активности: начало дня (ms) -> число выполнений за день
     val heatmap: Map<Long, Int> = emptyMap(),
+    // Дни, «спасённые» заморозкой (по всем привычкам) — для календаря и счётчика (§7.4.2)
+    val frozenDays: Set<Long> = emptySet(),
+    // Дни выполнения по каждой привычке (habitId -> набор startOfDay) — для бинарного календаря §5.2
+    val habitCompletionDays: Map<String, Set<Long>> = emptyMap(),
+    // Замороженные дни по каждой привычке (habitId -> набор startOfDay)
+    val frozenByHabit: Map<String, Set<Long>> = emptyMap(),
+    // Достижения (ТЗ §10.6)
+    val achievements: List<Achievement> = emptyList(),
     // Связи между привычками (закономерности)
     val correlations: List<HabitCorrelation> = emptyList(),
     // Разблокированы ли закономерности (после недели пользования)

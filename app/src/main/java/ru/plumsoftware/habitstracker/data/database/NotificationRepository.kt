@@ -38,6 +38,7 @@ class NotificationRepository(private val dao: NotificationsDao) {
         )
     }
 
+    suspend fun delete(notification: ru.plumsoftware.habitstracker.data.model.Notification) = dao.delete(notification)
     suspend fun markRead(id: Int) = dao.markRead(id)
     suspend fun markAllRead() = dao.markAllRead()
     suspend fun clearAll() = dao.clearAll()

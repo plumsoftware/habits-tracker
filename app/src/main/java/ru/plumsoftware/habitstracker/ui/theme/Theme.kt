@@ -7,6 +7,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
@@ -404,16 +405,46 @@ fun AppTheme(
         else -> extendedLight
     }
 
+    // Токены дизайн-системы (ТЗ §1): цвета, отступы, тени, формы, типографика, анимации.
+    val habitColors = if (darkTheme) DarkHabitColors else LightHabitColors
+    val elevation = if (darkTheme) DarkElevation else Elevation()
+
     MaterialTheme(
         colorScheme = colorScheme,
         typography = AppTypography,
         shapes = shapes
     ) {
         CompositionLocalProvider(
-            LocalExtendedColorScheme provides extendedColorScheme
+            LocalExtendedColorScheme provides extendedColorScheme,
+            LocalHabitColors provides habitColors,
+            LocalHabitShapes provides HabitShapes(),
+            LocalSpacing provides Spacing(),
+            LocalElevation provides elevation,
+            LocalMotion provides Motion(),
+            LocalHabitTypography provides HabitTypography(),
         ) {
             content()
         }
     }
+}
+
+/**
+ * Единая точка доступа к токенам дизайн-системы (ТЗ §1):
+ * `AppTheme.colors.accent`, `AppTheme.spacing.screenH`, `AppTheme.shapes.card`,
+ * `AppTheme.elevation.card`, `AppTheme.type.h1`, `AppTheme.motion.normal`.
+ */
+object AppTheme {
+    val colors: HabitColors
+        @Composable @ReadOnlyComposable get() = LocalHabitColors.current
+    val shapes: HabitShapes
+        @Composable @ReadOnlyComposable get() = LocalHabitShapes.current
+    val spacing: Spacing
+        @Composable @ReadOnlyComposable get() = LocalSpacing.current
+    val elevation: Elevation
+        @Composable @ReadOnlyComposable get() = LocalElevation.current
+    val type: HabitTypography
+        @Composable @ReadOnlyComposable get() = LocalHabitTypography.current
+    val motion: Motion
+        @Composable @ReadOnlyComposable get() = LocalMotion.current
 }
 

@@ -17,6 +17,9 @@ interface HabitCompletionDao {
     @Query("DELETE FROM habit_completions WHERE id = :id")
     suspend fun deleteCompletion(id: String)
 
+    @Query("SELECT * FROM habit_completions")
+    suspend fun getAllRaw(): List<HabitCompletion>
+
     @Query("SELECT * FROM habit_completions WHERE habitId = :habitId AND completionDate = :date")
     suspend fun getCompletion(habitId: String, date: Long): HabitCompletion?
 

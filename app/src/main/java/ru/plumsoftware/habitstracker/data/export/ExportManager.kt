@@ -4,14 +4,21 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
+import android.net.Uri
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
 import ru.plumsoftware.habitstracker.data.database.CategoryRepository
 import ru.plumsoftware.habitstracker.data.database.HabitRepository
+import ru.plumsoftware.habitstracker.data.model.Category
+import ru.plumsoftware.habitstracker.data.model.Habit
+import ru.plumsoftware.habitstracker.data.model.HabitCompletion
 import ru.plumsoftware.habitstracker.data.model.Periodicity
 import java.io.File
 import java.text.SimpleDateFormat
@@ -203,6 +210,86 @@ class ExportManager(
         file.outputStream().use { document.writeTo(it) }
         document.close()
         file
+    }
+
+    // ---------- JSON-бэкап / импорт (ТЗ §11.3) ----------
+
+    @Serializable
+    private data class HabitDto(
+        val id: String, val title: String, val body: String, val periodicity: Int,
+        val creationDate: Long, val targetCount: Int, val reminderTimeHour: Int,
+        val reminderTimeMinute: Int, val reminderInterval: Int, val categoryId: String?,
+        val emoji: String, val weekdays: String, val chainedAfterId: String?,
+        val freezeEnabled: Boolean, val archived: Boolean,
+    )
+
+    @Serializable
+    private data class CompletionDto(
+        val id: String, val habitId: String, val completionDate: Long,
+        val completed: Boolean, val completedCount: Int,
+    )
+
+    @Serializable
+    private data class CategoryDto(
+        val id: String, val name: String, val colorArgb: Long, val isBuiltIn: Boolean, val sortOrder: Int,
+    )
+
+    @Serializable
+    private data class BackupDto(
+        val version: Int = 1,
+        val exportedAt: Long,
+        val habits: List<HabitDto>,
+        val completions: List<CompletionDto>,
+        val categories: List<CategoryDto>,
+    )
+
+    private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
+
+    /** Полная резервная копия всех данных в JSON. */
+    suspend fun exportJson(): File = withContext(Dispatchers.IO) {
+        val habits = habitRepository.getAllHabitsRaw()
+        val completions = habitRepository.getAllCompletionsRaw()
+        val categories = categoryRepository.getAll().first()
+        val backup = BackupDto(
+            exportedAt = System.currentTimeMillis(),
+            habits = habits.map {
+                HabitDto(
+                    it.id, it.title, it.body, Periodicity.toInt(it.periodicity), it.creationDate,
+                    it.targetCount, it.reminderTimeHour, it.reminderTimeMinute, it.reminderInterval,
+                    it.categoryId, it.emoji, it.weekdays, it.chainedAfterId, it.freezeEnabled, it.archived,
+                )
+            },
+            completions = completions.map { CompletionDto(it.id, it.habitId, it.completionDate, it.completed, it.completedCount) },
+            categories = categories.map { CategoryDto(it.id, it.name, it.colorArgb, it.isBuiltIn, it.sortOrder) },
+        )
+        val file = File(exportsDir(), "backup_${System.currentTimeMillis()}.json")
+        file.writeText(json.encodeToString(backup), Charsets.UTF_8)
+        file
+    }
+
+    /** Импорт из JSON: ЗАМЕНЯЕТ текущие данные данными из файла [uri]. */
+    suspend fun importJson(uri: Uri): Unit = withContext(Dispatchers.IO) {
+        val text = context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+            ?: throw IllegalStateException("Не удалось прочитать файл")
+        val backup = json.decodeFromString<BackupDto>(text)
+
+        backup.categories.forEach {
+            categoryRepository.upsert(Category(it.id, it.name, it.colorArgb, it.isBuiltIn, it.sortOrder))
+        }
+        val habits = backup.habits.map {
+            Habit(
+                id = it.id, title = it.title, body = it.body,
+                periodicity = Periodicity.fromInt(it.periodicity), creationDate = it.creationDate,
+                targetCount = it.targetCount, reminderTimeHour = it.reminderTimeHour,
+                reminderTimeMinute = it.reminderTimeMinute, reminderInterval = it.reminderInterval,
+                categoryId = it.categoryId, emoji = it.emoji, weekdays = it.weekdays,
+                chainedAfterId = it.chainedAfterId, freezeEnabled = it.freezeEnabled, archived = it.archived,
+            )
+        }
+        val completions = backup.completions.map {
+            HabitCompletion(it.id, it.habitId, it.completionDate, it.completed, it.completedCount)
+        }
+        habitRepository.restore(habits, completions)
     }
 
     private fun uriFor(file: File) = FileProvider.getUriForFile(

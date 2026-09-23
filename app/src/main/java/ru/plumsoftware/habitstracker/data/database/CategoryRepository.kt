@@ -11,6 +11,9 @@ class CategoryRepository(
 ) {
     fun getAll(): Flow<List<Category>> = categoryDao.getAll()
 
+    /** Вставка/замена категории «как есть» (для восстановления из бэкапа). */
+    suspend fun upsert(category: Category) = categoryDao.insert(category)
+
     suspend fun getById(id: String): Category? = categoryDao.getById(id)
 
     /** Создаёт новую пользовательскую категорию. Ставит её в конец списка. */

@@ -32,7 +32,12 @@ class HabitNotificationWorker(
                 reminderInterval = inputData.getInt("interval", 5)
             )
 
-            habitNotificationManager.showNotification(habit)
+            if (inputData.getBoolean("chain_fallback", false)) {
+                // Резерв связанной привычки: родитель за день так и не закрыт
+                habitNotificationManager.notifyChainNext(habit, "")
+            } else {
+                habitNotificationManager.showNotification(habit)
+            }
         }
 
         return Result.success()

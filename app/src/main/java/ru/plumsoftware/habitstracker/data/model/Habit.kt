@@ -17,5 +17,22 @@ data class Habit(
     val reminderInterval: Int,
     // Ссылка на категорию (null = без категории). FK не задаём намеренно:
     // удаление категории не должно каскадно трогать привычки.
-    val categoryId: String? = null
-)
+    val categoryId: String? = null,
+    // Эмодзи-иконка привычки (ТЗ §2). Дефолт для старых записей — «🎯».
+    val emoji: String = "🎯",
+    // Дни недели для режима «По дням» (BY_WEEKDAYS): CSV из Calendar.DAY_OF_WEEK (1=вс..7=сб).
+    // Пусто = режим не по дням (используется periodicity).
+    val weekdays: String = "",
+    // Связывание привычек (ТЗ §7.4.1): id родительской привычки, после которой выполняется эта.
+    val chainedAfterId: String? = null,
+    // Заморозка стрика (ТЗ §7.4.2): 1 пропуск в неделю не сбрасывает серию.
+    val freezeEnabled: Boolean = false,
+    // Архив (ТЗ §11.3): привычка скрыта из активных списков, история отметок сохраняется.
+    val archived: Boolean = false
+) {
+    /** Множество дней недели (Calendar.DAY_OF_WEEK) для BY_WEEKDAYS; пусто если не задано. */
+    val weekdaySet: Set<Int>
+        get() = weekdays.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
+
+    val isByWeekdays: Boolean get() = weekdays.isNotBlank()
+}

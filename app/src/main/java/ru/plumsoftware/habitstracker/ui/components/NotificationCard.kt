@@ -120,5 +120,6 @@ private fun iconAndTint(
     NotificationType.STREAK -> Icons.Filled.LocalFireDepartment to series
     NotificationType.WEEKLY_REPORT -> Icons.Filled.BarChart to accent
     NotificationType.PUSH -> Icons.Filled.Notifications to accent
+    NotificationType.FREEZE -> Icons.Filled.Schedule to series
     NotificationType.GENERAL -> Icons.Filled.Schedule to accent
 }

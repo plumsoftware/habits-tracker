@@ -20,7 +20,7 @@ import ru.plumsoftware.habitstracker.data.model.dao.NotificationsDao
 
 @Database(
     entities = [Habit::class, HabitCompletion::class, Notification::class, Category::class],
-    version = 3,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -73,6 +73,36 @@ abstract class HabitDatabase : RoomDatabase() {
             }
         }
 
+        // Добавляет колонку emoji в привычки (ТЗ §2). Старые записи получают «🎯».
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE habits ADD COLUMN emoji TEXT NOT NULL DEFAULT '🎯'")
+            }
+        }
+
+        // Добавляет расписание по дням, связывание и заморозку (ТЗ §7.3/§7.4).
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE habits ADD COLUMN weekdays TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE habits ADD COLUMN chainedAfterId TEXT")
+                db.execSQL("ALTER TABLE habits ADD COLUMN freezeEnabled INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        // Добавляет флаг архива привычки (ТЗ §11.3).
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE habits ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        // Добавляет время отметки (для достижений «утро/вечер», ТЗ §10.6).
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE habit_completions ADD COLUMN completedAtMillis INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         // Для чистой установки (version 3 сразу) заполняем встроенные категории после создания БД
         private fun seedBuiltInCategories(db: SupportSQLiteDatabase) {
             fun insertBuiltIn(id: String, name: String, color: Long, order: Int) {
@@ -94,7 +124,7 @@ abstract class HabitDatabase : RoomDatabase() {
                     HabitDatabase::class.java,
                     "habit_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)
