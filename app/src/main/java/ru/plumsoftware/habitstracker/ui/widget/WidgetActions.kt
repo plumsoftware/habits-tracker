@@ -1,8 +1,6 @@
 package ru.plumsoftware.habitstracker.ui.widget
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.glance.GlanceId
 import androidx.glance.action.Action
 import androidx.glance.action.ActionParameters
@@ -19,15 +17,15 @@ object Deeplinks {
     const val NEW_HABIT = "habits://habit/new"
     const val TEMPLATES = "habits://templates"
     fun habit(id: String) = "habits://habit/$id"
+
+    // Deeplink передаётся как extra Intent'а (Glance 1.1.1 не умеет actionStartActivity(Intent))
+    val KEY = ActionParameters.Key<String>("deeplink")
+    const val EXTRA = "deeplink"
 }
 
-/** Открыть приложение по deeplink. */
-fun deeplinkAction(context: Context, uri: String): Action = actionStartActivity(
-    Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
-        setClass(context, MainActivity::class.java)
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-    }
-)
+/** Открыть приложение по deeplink (через ActionParameters → extra в Intent). */
+fun deeplinkAction(context: Context, uri: String): Action =
+    actionStartActivity<MainActivity>(actionParametersOf(Deeplinks.KEY to uri))
 
 /** Экшен-параметры отметки. */
 object ToggleKeys {

@@ -12,7 +12,10 @@ import androidx.glance.unit.ColorProvider
  * со светлой/тёмной парой через ColorProvider(day, night).
  */
 object WidgetColors {
-    private fun cp(light: Color, dark: Color) = ColorProvider(day = light, night = dark)
+    // Glance 1.1.1 не поддерживает ColorProvider(day, night) в unit-пакете
+    // (day/night — только через color-ресурсы). Виджеты на фиксированных фонах,
+    // поэтому используем светлые значения токенов.
+    private fun cp(light: Color, dark: Color): ColorProvider = ColorProvider(light)
 
     val accent = cp(Color(0xFF3A5AFF), Color(0xFF5B77FF))
     val accentSoft = cp(Color(0xFFE4E9FF), Color(0xFF23305C))

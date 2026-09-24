@@ -27,15 +27,18 @@ class MainActivity : ComponentActivity() {
     // Deeplink из виджета (habits://...), наблюдается Compose
     private val deeplinkState = androidx.compose.runtime.mutableStateOf<String?>(null)
 
+    private fun readDeeplink(intent: android.content.Intent?): String? =
+        intent?.data?.toString() ?: intent?.getStringExtra("deeplink")
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        deeplinkState.value = intent.data?.toString()
+        deeplinkState.value = readDeeplink(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        deeplinkState.value = intent?.data?.toString()
+        deeplinkState.value = readDeeplink(intent)
 
         // Телефон — только портрет; планшет/большой экран — автоповорот разрешён
         requestedOrientation = if (resources.getBoolean(R.bool.is_tablet)) {
