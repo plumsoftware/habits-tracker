@@ -111,7 +111,10 @@ object WidgetDataLoader {
                 completionRate = rate,
                 streak = overallStreak(allHabits, completedDaysByHabit, today, repo),
                 habits = habits,
-                week = weekStrip(allHabits, completedDaysByHabit, today, firstDow, repo),
+                week = weekStrip(
+                    allHabits, completedDaysByHabit, today, firstDow, repo,
+                    frozen = frozenDays(allHabits, completedDaysByHabit, today, settings.streakFreezesPerWeek, firstDow, repo),
+                ),
             )
         } catch (e: Exception) {
             WidgetData(dateLabel = dateLabel(System.currentTimeMillis()), dateShort = dateShort(System.currentTimeMillis()))
@@ -144,12 +147,50 @@ object WidgetDataLoader {
         return streak
     }
 
+    /** Замороженные дни (общий недельный пул из настройки) — как в приложении. */
+    private fun frozenDays(
+        allHabits: List<ru.plumsoftware.habitstracker.data.model.Habit>,
+        completedDaysByHabit: Map<String, Set<Long>>,
+        today: Long,
+        maxPerWeek: Int,
+        firstDow: Int,
+        repo: HabitRepository,
+    ): Set<Long> {
+        if (maxPerWeek <= 0) return emptySet()
+        val windowStart = today - 120 * DAY_MS
+        data class Cand(val day: Long)
+        val candidates = mutableListOf<Cand>()
+        for (h in allHabits) {
+            if (!h.freezeEnabled) continue
+            val done = completedDaysByHabit[h.id] ?: emptySet()
+            val latest = done.maxOrNull() ?: continue
+            var d = windowStart
+            while (d < today) {
+                if (d !in done && d < latest && repo.isActiveOn(h, d)) candidates.add(Cand(d))
+                d += DAY_MS
+            }
+        }
+        val union = mutableSetOf<Long>()
+        candidates.groupBy { weekKey(it.day, firstDow) }.forEach { (_, list) ->
+            list.map { it.day }.distinct().sorted().take(maxPerWeek).forEach { union.add(it) }
+        }
+        return union
+    }
+
+    private fun weekKey(dayMillis: Long, firstDow: Int): Int {
+        val cal = Calendar.getInstance().apply {
+            timeInMillis = dayMillis; firstDayOfWeek = firstDow; minimalDaysInFirstWeek = 4
+        }
+        return cal.get(Calendar.YEAR) * 100 + cal.get(Calendar.WEEK_OF_YEAR)
+    }
+
     private fun weekStrip(
         allHabits: List<ru.plumsoftware.habitstracker.data.model.Habit>,
         completedDaysByHabit: Map<String, Set<Long>>,
         today: Long,
         firstDow: Int,
         repo: HabitRepository,
+        frozen: Set<Long>,
     ): List<WidgetDay> {
         val cal = Calendar.getInstance().apply { timeInMillis = today; firstDayOfWeek = firstDow }
         while (cal.get(Calendar.DAY_OF_WEEK) != firstDow) cal.add(Calendar.DAY_OF_MONTH, -1)
@@ -170,6 +211,7 @@ object WidgetDataLoader {
                         scheduled.isEmpty() -> DaySquare.EMPTY
                         done == scheduled.size -> DaySquare.DONE
                         done > 0 -> DaySquare.PARTIAL
+                        frozen.contains(d) -> DaySquare.FROZEN
                         else -> DaySquare.EMPTY
                     }
                 }

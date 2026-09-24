@@ -30,10 +30,10 @@ import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.ui.components.AppIcon
 import ru.plumsoftware.habitstracker.ui.components.HabitIcons
 import ru.plumsoftware.habitstracker.ui.components.clickableNoRipple
-import ru.plumsoftware.habitstracker.ui.screen.main.analytics.AnalyticsScreen
+import ru.plumsoftware.habitstracker.ui.screen.main.analytics.AnalyticsScreenTablet
 import ru.plumsoftware.habitstracker.ui.screen.main.calendar.CalendarScreenTablet
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeState
-import ru.plumsoftware.habitstracker.ui.screen.main.settings.SettingsScreen
+import ru.plumsoftware.habitstracker.ui.screen.main.settings.SettingsScreenTablet
 import ru.plumsoftware.habitstracker.ui.screen.main.settings.SettingsViewModel
 import ru.plumsoftware.habitstracker.ui.screen.main.today.TodayScreenTablet
 import ru.plumsoftware.habitstracker.ui.theme.AppTheme
@@ -74,21 +74,18 @@ fun TabletShell(
                     state = state, onSelectDate = onSelectDate, onHabitClick = onHabitClick,
                     modifier = Modifier.fillMaxSize(),
                 )
-                MainScreenStates.Statistics -> Centered {
-                    AnalyticsScreen(state = state, onHabitClick = onHabitClick, modifier = Modifier.fillMaxSize())
-                }
-                MainScreenStates.Settings -> Centered {
-                    SettingsScreen(
-                        padding = PaddingValues(0.dp),
-                        settingsViewModel = settingsViewModel,
-                        isDark = isDark,
-                        overallStreak = state.overallStreak,
-                        frozenDays = state.frozenDays,
-                        firstDayOfWeek = state.firstDayOfWeek,
-                        archivedHabits = state.archivedHabits,
-                        onUnarchive = onUnarchive,
-                    )
-                }
+                MainScreenStates.Statistics -> AnalyticsScreenTablet(
+                    state = state, onHabitClick = onHabitClick, modifier = Modifier.fillMaxSize(),
+                )
+                MainScreenStates.Settings -> SettingsScreenTablet(
+                    settingsViewModel = settingsViewModel,
+                    isDark = isDark,
+                    overallStreak = state.overallStreak,
+                    frozenDays = state.frozenDays,
+                    firstDayOfWeek = state.firstDayOfWeek,
+                    archivedHabits = state.archivedHabits,
+                    onUnarchive = onUnarchive,
+                )
                 else -> TodayScreenTablet(
                     state = state,
                     onSelectDate = onSelectDate,

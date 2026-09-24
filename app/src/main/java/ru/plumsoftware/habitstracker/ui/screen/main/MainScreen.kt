@@ -241,6 +241,7 @@ fun HomeScreen(
 
     // §8 Детали привычки — полноэкранный оверлей
     detailHabit?.let { habit ->
+      SlideInOnAppear {
         HabitDetailScreen(
             habit = habit,
             detail = state.habitDetail,
@@ -267,10 +268,12 @@ fun HomeScreen(
                 viewModel.onEvent(HomeEvent.LoadHabitDetail(habit.id))
             },
         )
+      }
     }
 
     // §7 Форма «Новая привычка» / «Настроить привычку» — полноэкранный оверлей
     if (showForm) {
+      SlideInOnAppear {
         HabitFormScreen(
             editing = formHabit,
             categories = state.categories,
@@ -288,10 +291,12 @@ fun HomeScreen(
             onOpenTemplates = { showTemplates = true },
             onCreateCategory = { name, color -> viewModel.onEvent(HomeEvent.CreateCategory(name, color)) },
         )
+      }
     }
 
     // §6 Экран «Шаблоны» — полноэкранный оверлей поверх вкладок
     if (showTemplates) {
+      SlideInOnAppear {
         TemplatesScreen(
             onBack = { showTemplates = false },
             onAddHabit = { habit ->
@@ -301,8 +306,24 @@ fun HomeScreen(
                 viewModel.onEvent(HomeEvent.OnHome)
             },
         )
+      }
     }
 
+}
+
+/** §13: push-экран (оверлей) въезжает справа с фейдом при появлении. */
+@Composable
+private fun SlideInOnAppear(content: @Composable () -> Unit) {
+    val visibleState = androidx.compose.runtime.remember {
+        androidx.compose.animation.core.MutableTransitionState(false).apply { targetState = true }
+    }
+    androidx.compose.animation.AnimatedVisibility(
+        visibleState = visibleState,
+        enter = androidx.compose.animation.slideInHorizontally(
+            animationSpec = androidx.compose.animation.core.tween(220, easing = ru.plumsoftware.habitstracker.ui.theme.EaseStandard),
+        ) { full -> full / 3 } + androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)),
+        exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(120)),
+    ) { content() }
 }
 
 /** Событие навигации по разделам для планшетного рельса. */

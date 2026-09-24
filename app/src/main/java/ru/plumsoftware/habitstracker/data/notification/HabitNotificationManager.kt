@@ -258,6 +258,15 @@ class HabitNotificationManager(
         if (!NotificationUtils.areNotificationsEnabled(context)) return
         val settings = runBlocking { settingsRepository.current() }
         if (!settings.pushEnabled) return
+        // Потомок уже выполнен сегодня — не напоминаем
+        val childDone = runBlocking {
+            runCatching {
+                org.koin.core.context.GlobalContext.get()
+                    .get<ru.plumsoftware.habitstracker.data.database.HabitRepository>()
+                    .getHabitStatus(child.id, System.currentTimeMillis())
+            }.getOrDefault(false)
+        }
+        if (childDone) return
         if (isQuietNow(settings)) { rescheduleAfterQuiet(child, chainFallback = true, endHour = settings.quietEndHour); return }
 
         val notificationManager =

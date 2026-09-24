@@ -46,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.TextFieldValue
@@ -116,6 +117,20 @@ fun HabitFormScreen(
     var chainedAfterId by remember { mutableStateOf(editing?.chainedAfterId) }
     var freezeEnabled by remember { mutableStateOf(editing?.freezeEnabled ?: false) }
     var titleError by remember { mutableStateOf(false) }
+    var shakeTrigger by remember { mutableIntStateOf(0) }
+    var pulsedChip by remember { mutableIntStateOf(-1) }
+    androidx.compose.runtime.LaunchedEffect(pulsedChip) {
+        if (pulsedChip >= 0) { kotlinx.coroutines.delay(130); pulsedChip = -1 }
+    }
+    val shakeX = remember { androidx.compose.animation.core.Animatable(0f) }
+    androidx.compose.runtime.LaunchedEffect(shakeTrigger) {
+        if (shakeTrigger > 0) {
+            shakeX.animateTo(0f, androidx.compose.animation.core.keyframes {
+                durationMillis = 300
+                (-8f) at 40; 8f at 90; (-6f) at 150; 6f at 210; 0f at 300
+            })
+        }
+    }
     var weekdayError by remember { mutableStateOf(false) }
 
     var showEmojiPicker by remember { mutableStateOf(false) }
@@ -166,16 +181,6 @@ fun HabitFormScreen(
             IconSquare(HabitIcons.chevronLeft, onBack, 40.dp, 24.dp)
             Text(if (isEdit) "Настроить привычку" else "Новая привычка", style = AppTheme.type.h2, color = colors.textPrimary)
             Spacer(Modifier.weight(1f))
-            if (isEdit) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(colors.dangerSoft)
-                        .clickableNoRipple(onClick = { editing?.let(onDelete) }),
-                    contentAlignment = Alignment.Center,
-                ) { AppIcon(HabitIcons.close, tint = colors.danger, size = 18.dp) }
-            }
         }
 
         LazyColumn(
@@ -206,14 +211,20 @@ fun HabitFormScreen(
                         androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(QUICK_TEMPLATES.size) { i ->
                                 val t = QUICK_TEMPLATES[i]
+                                val chipScale by androidx.compose.animation.core.animateFloatAsState(
+                                    if (pulsedChip == i) 0.94f else 1f,
+                                    animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.4f, stiffness = 500f),
+                                    label = "chip",
+                                )
                                 Row(
-                                    modifier = Modifier.clip(AppTheme.shapes.pill)
+                                    modifier = Modifier.scale(chipScale).clip(AppTheme.shapes.pill)
                                         .background(categoryColor(t.categoryId, colors).copy(alpha = 0.14f))
                                         .clickableNoRipple(onClick = {
                                             emoji = t.emoji
                                             title = TextFieldValue(t.title)
                                             categoryId = t.categoryId
                                             titleError = false
+                                            pulsedChip = i
                                         })
                                         .padding(horizontal = 13.dp, vertical = 9.dp),
                                     verticalAlignment = Alignment.CenterVertically,
@@ -256,8 +267,10 @@ fun HabitFormScreen(
                     Text("НАЗВАНИЕ", style = AppTheme.type.overline, color = colors.textSecondary)
                     Spacer(Modifier.height(8.dp))
                     Box(
-                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                            .background(colors.surfaceMuted).padding(15.dp),
+                        modifier = Modifier.offset(x = shakeX.value.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                            .background(colors.surfaceMuted)
+                            .then(if (titleError) Modifier.border(1.5.dp, colors.danger, RoundedCornerShape(16.dp)) else Modifier)
+                            .padding(15.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         if (title.text.isEmpty()) {
@@ -409,9 +422,26 @@ fun HabitFormScreen(
                 PrimaryButton(
                     text = if (isEdit) "Сохранить изменения" else "Сохранить привычку",
                     onClick = {
-                        if (title.text.isBlank()) titleError = true else onSave(buildHabit())
+                        if (title.text.isBlank()) { titleError = true; shakeTrigger++ } else onSave(buildHabit())
                     },
                 )
+            }
+            // Удаление привычки — под кнопкой сохранения (только в режиме редактирования)
+            if (isEdit) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clip(AppTheme.shapes.button)
+                            .background(colors.dangerSoft)
+                            .clickableNoRipple(onClick = { editing?.let(onDelete) })
+                            .padding(vertical = 16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppIcon(HabitIcons.close, tint = colors.danger, size = 16.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Удалить привычку", style = AppTheme.type.h5, color = colors.danger)
+                    }
+                }
             }
         }
     }

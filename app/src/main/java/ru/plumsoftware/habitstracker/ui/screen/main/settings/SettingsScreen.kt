@@ -6,7 +6,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -69,24 +74,8 @@ fun SettingsScreen(
     val colors = AppTheme.colors
     val spacing = AppTheme.spacing
     val settings by settingsViewModel.settings.collectAsState()
-    val exportManager: ExportManager = koinInject()
-    val habitRepository: ru.plumsoftware.habitstracker.data.database.HabitRepository = koinInject()
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-
-    var sheet by remember { mutableStateOf<SettingsSheet?>(null) }
     val freezesUsed = remember(frozenDays, firstDayOfWeek) { countThisWeek(frozenDays, firstDayOfWeek) }
-
-    val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) scope.launch { runCatching { exportManager.importJson(uri) } }
-    }
-    fun rangeFromTo(days: Int?): Pair<Long, Long> {
-        val to = System.currentTimeMillis()
-        val from = if (days == null) 0L else to - days.toLong() * 24 * 60 * 60 * 1000
-        return from to to
-    }
+    var sheet by remember { mutableStateOf<SettingsSheet?>(null) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(colors.bgScreen),
@@ -97,159 +86,218 @@ fun SettingsScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(spacing.sectionGap),
     ) {
-        item { Text("Настройки", style = AppTheme.type.h1, color = colors.textPrimary) }
-        item { StreakBanner(streak = overallStreak, freezes = (settings.streakFreezesPerWeek - freezesUsed).coerceAtLeast(0)) }
-
-        item { SectionLabel("УВЕДОМЛЕНИЯ") }
         item {
-            SectionCard {
-                ToggleRow(HabitIcons.bell, colors.accent, colors.accentSoft, "Push-уведомления", "Напоминания о привычках",
-                    checked = settings.pushEnabled, onChange = settingsViewModel::setPushEnabled)
-                Divider()
-                ToggleRow(HabitIcons.volume, colors.info, colors.infoSoft, "Звук", "Короткий сигнал при отметке",
-                    checked = settings.soundEnabled, enabled = settings.pushEnabled, onChange = settingsViewModel::setSoundEnabled)
-                Divider()
-                ToggleRow(HabitIcons.flame, colors.warning, colors.warningSoft, "Оповещать о сериях", "Когда серия под угрозой",
-                    checked = settings.seriesEnabled, enabled = settings.pushEnabled, onChange = settingsViewModel::setSeriesEnabled)
-                Divider()
-                ToggleRow(HabitIcons.moon, colors.notice, colors.noticeSoft, "Тихие часы",
-                    "С %02d:00 до %02d:00".format(settings.quietStartHour, settings.quietEndHour),
-                    checked = settings.quietHoursEnabled, enabled = settings.pushEnabled,
-                    onRowClick = { sheet = SettingsSheet.QUIET_HOURS },
-                    onChange = settingsViewModel::setQuietHoursEnabled)
+            Column(verticalArrangement = Arrangement.spacedBy(spacing.sectionGap)) {
+                SettingsPaneA(settings, settingsViewModel, overallStreak, freezesUsed) { sheet = it }
             }
         }
-
-        item { SectionLabel("ОСНОВНЫЕ") }
         item {
-            SectionCard {
-                NavRow(HabitIcons.navCalendar, colors.accent, colors.accentSoft, "Начало недели",
-                    weekStartTitle(settings.weekStart)) { sheet = SettingsSheet.WEEK_START }
-                Divider()
-                NavRow(HabitIcons.palette, colors.notice, colors.noticeSoft, "Оформление",
-                    themeTitle(settings.themeMode)) { sheet = SettingsSheet.THEME }
-                Divider()
-                NavRow(HabitIcons.snowflake, colors.info, colors.infoSoft, "Заморозки стрика",
-                    "${settings.streakFreezesPerWeek} в неделю") { sheet = SettingsSheet.FREEZES }
-                Divider()
-                NavRow(HabitIcons.export, colors.success, colors.successSoft, "Экспорт данных",
-                    "CSV, PDF") { sheet = SettingsSheet.EXPORT }
-                Divider()
-                if (archivedHabits.isNotEmpty()) {
-                    NavRow(HabitIcons.repeat, colors.accent, colors.accentSoft, "Архив привычек",
-                        "${archivedHabits.size}") { sheet = SettingsSheet.ARCHIVE }
-                    Divider()
-                }
-                NavRow(HabitIcons.target, colors.warning, colors.warningSoft, "Цель по дням",
-                    "${settings.weeklyGoalDays} из 7") { sheet = SettingsSheet.WEEKLY_GOAL }
-                Divider()
-                NavRow(HabitIcons.info, colors.textSecondary, colors.surfaceMuted, "О приложении",
-                    BuildConfig.VERSION_NAME) { sheet = SettingsSheet.ABOUT }
+            Column(verticalArrangement = Arrangement.spacedBy(spacing.sectionGap)) {
+                SettingsPaneB(settings, settingsViewModel, archivedHabits) { sheet = it }
             }
-        }
-
-        item { SectionLabel("РАЗРЕШЕНИЯ") }
-        item { PermissionsSection() }
-
-        item {
-            Box(
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-                    .background(colors.accentSoft)
-                    .clickableNoRipple(onClick = { settingsViewModel.resetOnboarding() })
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center,
-            ) { Text("Показать онбординг снова", style = AppTheme.type.bodyS, color = colors.accent) }
-        }
-
-        item {
-            Text(
-                "Удалить все данные",
-                style = AppTheme.type.bodyS, color = colors.danger,
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                    .clickableNoRipple(onClick = { sheet = SettingsSheet.DELETE_ALL })
-                    .padding(vertical = 14.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
         }
     }
 
-    // ---- Листы ----
+    SettingsSheets(sheet, { sheet = it }, settings, settingsViewModel, freezesUsed, archivedHabits, onUnarchive)
+}
+
+/** Левая колонка настроек: заголовок, серия, уведомления, разрешения. */
+@androidx.compose.runtime.Composable
+private fun ColumnScope.SettingsPaneA(
+    settings: AppSettings,
+    settingsViewModel: SettingsViewModel,
+    overallStreak: Int,
+    freezesUsed: Int,
+    onSheet: (SettingsSheet) -> Unit,
+) {
+    val colors = AppTheme.colors
+    Text("Настройки", style = AppTheme.type.h1, color = colors.textPrimary)
+    StreakBanner(streak = overallStreak, freezes = (settings.streakFreezesPerWeek - freezesUsed).coerceAtLeast(0))
+    SectionLabel("УВЕДОМЛЕНИЯ")
+    SectionCard {
+        ToggleRow(HabitIcons.bell, colors.accent, colors.accentSoft, "Push-уведомления", "Напоминания о привычках",
+            checked = settings.pushEnabled, onChange = settingsViewModel::setPushEnabled)
+        Divider()
+        ToggleRow(HabitIcons.volume, colors.info, colors.infoSoft, "Звук", "Короткий сигнал при отметке",
+            checked = settings.soundEnabled, enabled = settings.pushEnabled, onChange = settingsViewModel::setSoundEnabled)
+        Divider()
+        ToggleRow(HabitIcons.flame, colors.warning, colors.warningSoft, "Оповещать о сериях", "Когда серия под угрозой",
+            checked = settings.seriesEnabled, enabled = settings.pushEnabled, onChange = settingsViewModel::setSeriesEnabled)
+        Divider()
+        ToggleRow(HabitIcons.moon, colors.notice, colors.noticeSoft, "Тихие часы",
+            "С %02d:00 до %02d:00".format(settings.quietStartHour, settings.quietEndHour),
+            checked = settings.quietHoursEnabled, enabled = settings.pushEnabled,
+            onRowClick = { onSheet(SettingsSheet.QUIET_HOURS) },
+            onChange = settingsViewModel::setQuietHoursEnabled)
+    }
+    SectionLabel("РАЗРЕШЕНИЯ")
+    PermissionsSection()
+}
+
+/** Правая колонка настроек: основные пункты и опасные действия. */
+@androidx.compose.runtime.Composable
+private fun ColumnScope.SettingsPaneB(
+    settings: AppSettings,
+    settingsViewModel: SettingsViewModel,
+    archivedHabits: List<ru.plumsoftware.habitstracker.data.model.Habit>,
+    onSheet: (SettingsSheet) -> Unit,
+) {
+    val colors = AppTheme.colors
+    SectionLabel("ОСНОВНЫЕ")
+    SectionCard {
+        NavRow(HabitIcons.navCalendar, colors.accent, colors.accentSoft, "Начало недели",
+            weekStartTitle(settings.weekStart)) { onSheet(SettingsSheet.WEEK_START) }
+        Divider()
+        NavRow(HabitIcons.palette, colors.notice, colors.noticeSoft, "Оформление",
+            themeTitle(settings.themeMode)) { onSheet(SettingsSheet.THEME) }
+        Divider()
+        NavRow(HabitIcons.snowflake, colors.info, colors.infoSoft, "Заморозки стрика",
+            "${settings.streakFreezesPerWeek} в неделю") { onSheet(SettingsSheet.FREEZES) }
+        Divider()
+        NavRow(HabitIcons.export, colors.success, colors.successSoft, "Экспорт данных",
+            "CSV, PDF") { onSheet(SettingsSheet.EXPORT) }
+        Divider()
+        if (archivedHabits.isNotEmpty()) {
+            NavRow(HabitIcons.repeat, colors.accent, colors.accentSoft, "Архив привычек",
+                "${archivedHabits.size}") { onSheet(SettingsSheet.ARCHIVE) }
+            Divider()
+        }
+        NavRow(HabitIcons.target, colors.warning, colors.warningSoft, "Цель по дням",
+            "${settings.weeklyGoalDays} из 7") { onSheet(SettingsSheet.WEEKLY_GOAL) }
+        Divider()
+        NavRow(HabitIcons.info, colors.textSecondary, colors.surfaceMuted, "О приложении",
+            BuildConfig.VERSION_NAME) { onSheet(SettingsSheet.ABOUT) }
+    }
+    Box(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(colors.accentSoft)
+            .clickableNoRipple(onClick = { settingsViewModel.resetOnboarding() }).padding(16.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text("Показать онбординг снова", style = AppTheme.type.bodyS, color = colors.accent) }
+    Text(
+        "Удалить все данные", style = AppTheme.type.bodyS, color = colors.danger,
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .clickableNoRipple(onClick = { onSheet(SettingsSheet.DELETE_ALL) }).padding(vertical = 14.dp),
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+    )
+}
+
+/** Планшетная (альбомная) версия настроек — две колонки. */
+@androidx.compose.runtime.Composable
+fun SettingsScreenTablet(
+    settingsViewModel: SettingsViewModel,
+    isDark: Boolean,
+    overallStreak: Int = 0,
+    frozenDays: Set<Long> = emptySet(),
+    firstDayOfWeek: Int = Calendar.MONDAY,
+    archivedHabits: List<ru.plumsoftware.habitstracker.data.model.Habit> = emptyList(),
+    onUnarchive: (String) -> Unit = {},
+) {
+    val colors = AppTheme.colors
+    val spacing = AppTheme.spacing
+    val settings by settingsViewModel.settings.collectAsState()
+    val freezesUsed = remember(frozenDays, firstDayOfWeek) { countThisWeek(frozenDays, firstDayOfWeek) }
+    var sheet by remember { mutableStateOf<SettingsSheet?>(null) }
+
+    Row(
+        modifier = Modifier.fillMaxSize().background(colors.bgScreen)
+            .padding(horizontal = spacing.screenH, vertical = spacing.screenTop),
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        Column(
+            modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(spacing.sectionGap),
+        ) {
+            SettingsPaneA(settings, settingsViewModel, overallStreak, freezesUsed) { sheet = it }
+            Spacer(Modifier.height(spacing.screenBottomPlain))
+        }
+        Column(
+            modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(spacing.sectionGap),
+        ) {
+            SettingsPaneB(settings, settingsViewModel, archivedHabits) { sheet = it }
+            Spacer(Modifier.height(spacing.screenBottomPlain))
+        }
+    }
+
+    SettingsSheets(sheet, { sheet = it }, settings, settingsViewModel, freezesUsed, archivedHabits, onUnarchive)
+}
+
+/** Общий диспетчер bottom-sheet'ов настроек (телефон + планшет). */
+@OptIn(ExperimentalMaterial3Api::class)
+@androidx.compose.runtime.Composable
+private fun SettingsSheets(
+    sheet: SettingsSheet?,
+    setSheet: (SettingsSheet?) -> Unit,
+    settings: AppSettings,
+    settingsViewModel: SettingsViewModel,
+    freezesUsed: Int,
+    archivedHabits: List<ru.plumsoftware.habitstracker.data.model.Habit>,
+    onUnarchive: (String) -> Unit,
+) {
+    val exportManager: ExportManager = koinInject()
+    val habitRepository: ru.plumsoftware.habitstracker.data.database.HabitRepository = koinInject()
+    val scope = rememberCoroutineScope()
+    val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri -> if (uri != null) scope.launch { runCatching { exportManager.importJson(uri) } } }
+    fun rangeFromTo(days: Int?): Pair<Long, Long> {
+        val to = System.currentTimeMillis()
+        return (if (days == null) 0L else to - days.toLong() * 24 * 60 * 60 * 1000) to to
+    }
     when (sheet) {
         SettingsSheet.WEEK_START -> OptionsSheet(
             title = "Начало недели",
             options = listOf("Понедельник", "Воскресенье"),
             selectedIndex = if (settings.weekStart == WeekStart.MONDAY) 0 else 1,
-            onSelect = { settingsViewModel.setWeekStart(if (it == 0) WeekStart.MONDAY else WeekStart.SUNDAY); sheet = null },
-            onDismiss = { sheet = null },
+            onSelect = { settingsViewModel.setWeekStart(if (it == 0) WeekStart.MONDAY else WeekStart.SUNDAY); setSheet(null) },
+            onDismiss = { setSheet(null) },
         )
         SettingsSheet.THEME -> OptionsSheet(
             title = "Оформление",
             options = listOf("Системное", "Светлое", "Тёмное"),
             selectedIndex = when (settings.themeMode) { ThemeMode.SYSTEM -> 0; ThemeMode.LIGHT -> 1; ThemeMode.DARK -> 2 },
-            onSelect = {
-                settingsViewModel.setThemeMode(when (it) { 0 -> ThemeMode.SYSTEM; 1 -> ThemeMode.LIGHT; else -> ThemeMode.DARK })
-                sheet = null
-            },
-            onDismiss = { sheet = null },
+            onSelect = { settingsViewModel.setThemeMode(when (it) { 0 -> ThemeMode.SYSTEM; 1 -> ThemeMode.LIGHT; else -> ThemeMode.DARK }); setSheet(null) },
+            onDismiss = { setSheet(null) },
         )
         SettingsSheet.FREEZES -> OptionsSheet(
             title = "Заморозки стрика",
             subtitle = "Заморозка закрывает пропущенный день, чтобы серия не сбросилась.\nИспользовано на этой неделе: $freezesUsed из ${settings.streakFreezesPerWeek}",
             options = listOf("0 в неделю", "1 в неделю", "2 в неделю", "3 в неделю"),
             selectedIndex = settings.streakFreezesPerWeek.coerceIn(0, 3),
-            onSelect = { settingsViewModel.setStreakFreezesPerWeek(it); sheet = null },
-            onDismiss = { sheet = null },
+            onSelect = { settingsViewModel.setStreakFreezesPerWeek(it); setSheet(null) },
+            onDismiss = { setSheet(null) },
         )
         SettingsSheet.WEEKLY_GOAL -> OptionsSheet(
             title = "Цель по дням",
             subtitle = "Сколько дней в неделю считается успешной неделей",
             options = (1..7).map { "$it из 7" },
             selectedIndex = (settings.weeklyGoalDays - 1).coerceIn(0, 6),
-            onSelect = { settingsViewModel.setWeeklyGoalDays(it + 1); sheet = null },
-            onDismiss = { sheet = null },
+            onSelect = { settingsViewModel.setWeeklyGoalDays(it + 1); setSheet(null) },
+            onDismiss = { setSheet(null) },
         )
         SettingsSheet.EXPORT -> ExportSheet(
-            onDismiss = { sheet = null },
-            onExportCsv = { days ->
-                sheet = null
-                val (from, to) = rangeFromTo(days)
-                scope.launch { runCatching { exportManager.share(exportManager.exportCsv(from, to), "text/csv") } }
-            },
-            onExportPdf = { days ->
-                sheet = null
-                val (from, to) = rangeFromTo(days)
-                scope.launch { runCatching { exportManager.share(exportManager.exportPdf(from, to), "application/pdf") } }
-            },
-            onExportJson = {
-                sheet = null
-                scope.launch { runCatching { exportManager.share(exportManager.exportJson(), "application/json") } }
-            },
-            onImport = {
-                sheet = null
-                importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*"))
-            },
+            onDismiss = { setSheet(null) },
+            onExportCsv = { days -> setSheet(null); val (f, t) = rangeFromTo(days); scope.launch { runCatching { exportManager.share(exportManager.exportCsv(f, t), "text/csv") } } },
+            onExportPdf = { days -> setSheet(null); val (f, t) = rangeFromTo(days); scope.launch { runCatching { exportManager.share(exportManager.exportPdf(f, t), "application/pdf") } } },
+            onExportJson = { setSheet(null); scope.launch { runCatching { exportManager.share(exportManager.exportJson(), "application/json") } } },
+            onImport = { setSheet(null); importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) },
         )
         SettingsSheet.QUIET_HOURS -> OptionsSheet(
             title = "Тихие часы",
             subtitle = "В этот интервал уведомления откладываются",
             options = QUIET_PRESETS.map { it.label },
             selectedIndex = QUIET_PRESETS.indexOfFirst { it.start == settings.quietStartHour && it.end == settings.quietEndHour },
-            onSelect = { i -> settingsViewModel.setQuietHours(QUIET_PRESETS[i].start, QUIET_PRESETS[i].end); sheet = null },
-            onDismiss = { sheet = null },
+            onSelect = { i -> settingsViewModel.setQuietHours(QUIET_PRESETS[i].start, QUIET_PRESETS[i].end); setSheet(null) },
+            onDismiss = { setSheet(null) },
         )
         SettingsSheet.DELETE_ALL -> DeleteAllSheet(
-            onConfirm = {
-                scope.launch { runCatching { habitRepository.wipeAllHabits() } }
-                sheet = null
-            },
-            onDismiss = { sheet = null },
+            onConfirm = { scope.launch { runCatching { habitRepository.wipeAllHabits() } }; setSheet(null) },
+            onDismiss = { setSheet(null) },
         )
         SettingsSheet.ARCHIVE -> ArchiveSheet(
-            habits = archivedHabits,
-            onUnarchive = { onUnarchive(it) },
-            onDismiss = { sheet = null },
+            habits = archivedHabits, onUnarchive = { onUnarchive(it) }, onDismiss = { setSheet(null) },
         )
-        SettingsSheet.ABOUT -> AboutSheet(onDismiss = { sheet = null })
+        SettingsSheet.ABOUT -> AboutSheet(onDismiss = { setSheet(null) })
         null -> Unit
     }
 }

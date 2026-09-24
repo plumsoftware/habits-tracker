@@ -6,6 +6,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -84,6 +87,51 @@ fun AnalyticsScreen(
         item { AchievementsCard(achievements = state.achievements) }
         state.correlations.firstOrNull()?.let { corr ->
             item { PatternCard(fromTitle = corr.fromTitle, toTitle = corr.toTitle, rate = corr.rate) }
+        }
+    }
+}
+
+/** Планшетная (альбомная) «Аналитика»: слева — период/метрики/динамика/инсайты,
+ *  справа — серии, достижения, закономерность. */
+@Composable
+fun AnalyticsScreenTablet(
+    state: HomeState,
+    modifier: Modifier = Modifier,
+    onHabitClick: (Habit) -> Unit = {},
+) {
+    val colors = AppTheme.colors
+    val spacing = AppTheme.spacing
+    var period by remember { mutableStateOf(Period.WEEK) }
+    val bars = remember(period, state) { barsForPeriod(period, state) }
+    val checks = bars.sumOf { it.value }
+    val rate = (state.monthlyStats.completionRate * 100).toInt()
+
+    Row(
+        modifier = modifier.fillMaxWidth().background(colors.bgScreen)
+            .padding(horizontal = spacing.screenH, vertical = spacing.screenTop),
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        Column(
+            modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(spacing.sectionGap),
+        ) {
+            Text("Аналитика", style = AppTheme.type.h1, color = colors.textPrimary)
+            PeriodSwitch(period = period, onSelect = { period = it })
+            MetricTiles(rate = rate, checks = checks, period = period)
+            DynamicsCard(bars = bars, period = period)
+            InsightTiles(state = state)
+            Spacer(Modifier.height(spacing.screenBottomPlain))
+        }
+        Column(
+            modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(spacing.sectionGap),
+        ) {
+            StreaksCard(state = state, onHabitClick = onHabitClick)
+            AchievementsCard(achievements = state.achievements)
+            state.correlations.firstOrNull()?.let { corr ->
+                PatternCard(fromTitle = corr.fromTitle, toTitle = corr.toTitle, rate = corr.rate)
+            }
+            Spacer(Modifier.height(spacing.screenBottomPlain))
         }
     }
 }
