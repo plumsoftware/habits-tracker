@@ -76,6 +76,18 @@ abstract class HabitDatabase : RoomDatabase() {
         val MIGRATION_8_9 = object : Migration(8, 9) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS workout_sessions (id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, startedAtMillis INTEGER NOT NULL, endedAtMillis INTEGER, notes TEXT NOT NULL, createdAtMillis INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_sessions_startedAtMillis ON workout_sessions(startedAtMillis)")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS workout_exercises (
+                    id TEXT NOT NULL PRIMARY KEY, sessionId TEXT NOT NULL, name TEXT NOT NULL, sortOrder INTEGER NOT NULL,
+                    FOREIGN KEY(sessionId) REFERENCES workout_sessions(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_exercises_sessionId ON workout_exercises(sessionId)")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS workout_sets (
+                    id TEXT NOT NULL PRIMARY KEY, exerciseId TEXT NOT NULL, setNumber INTEGER NOT NULL,
+                    reps INTEGER NOT NULL, weightKg REAL NOT NULL, completed INTEGER NOT NULL,
+                    FOREIGN KEY(exerciseId) REFERENCES workout_exercises(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_sets_exerciseId ON workout_sets(exerciseId)")
             }
         }
 
