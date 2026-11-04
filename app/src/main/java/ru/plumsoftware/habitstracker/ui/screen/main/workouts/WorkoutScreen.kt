@@ -339,24 +339,46 @@ fun WorkoutScreen(onBack: () -> Unit) {
                 val totalMinutes = completed.sumOf {
                     ((it.endedAtMillis ?: it.startedAtMillis) - it.startedAtMillis).coerceAtLeast(0L) / 60_000L
                 }
+                var progressPeriod by remember { mutableStateOf("Неделя") }
+                val buckets = remember(completed, progressPeriod) { workoutProgressBuckets(completed, progressPeriod) }
                 LazyColumn(Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    item { SectionHeading("Твоя статистика") }
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    item { SectionHeading("Твой прогресс") }
                     item {
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             StatCard(completed.size.toString(), "Тренировок", Modifier.weight(1f))
-                            StatCard(totalMinutes.toString(), "Минут", Modifier.weight(1f))
+                            StatCard(totalMinutes.toString(), "Минут активности", Modifier.weight(1f))
                         }
                     }
                     item {
                         val average = if (completed.isEmpty()) 0 else totalMinutes / completed.size
                         StatCard(average.toString(), "Средняя длительность, мин", Modifier.fillMaxWidth())
                     }
+                    item {
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
+                            .background(colors.surface).padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Text("Активность", color = colors.textPrimary, style = AppTheme.type.h3)
+                            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                listOf("Неделя", "Месяц", "Год").forEach { period ->
+                                    PillChip(period,
+                                        if (progressPeriod == period) colors.accent else colors.bgScreen,
+                                        if (progressPeriod == period) colors.inkOn else colors.textSecondary,
+                                        onClick = { progressPeriod = period })
+                                }
+                            }
+                            WorkoutProgressChart(buckets)
+                        }
+                    }
                     item { SectionHeading("Последние занятия") }
                     items(completed.take(7), key = { it.id }) { session ->
                         SessionCard(session) { selectedId = session.id; route = WorkoutRoute.DETAIL }
                     }
-                    if (completed.isEmpty()) item { EmptyHint("Заверши первую тренировку — здесь появится статистика") }
+                    if (completed.isEmpty()) item {
+                        EmptyHint("Заверши первую тренировку — здесь появится статистика и график активности")
+                    }
+                    item { Spacer(Modifier.height(16.dp)) }
                 }
             }
         }
@@ -548,4 +570,75 @@ private fun duration(session: WorkoutSession): String {
     val end = session.endedAtMillis ?: System.currentTimeMillis()
     val minutes = ((end - session.startedAtMillis).coerceAtLeast(0L) / 60_000L).toInt()
     return if (minutes >= 60) "${minutes / 60} ч ${minutes % 60} мин" else "$minutes мин"
+}
+
+private fun workoutProgressBuckets(sessions: List<WorkoutSession>, period: String): List<Pair<String, Int>> {
+    val now = System.currentTimeMillis()
+    return when (period) {
+        "Месяц" -> (3 downTo 0).map { offset ->
+            val c = java.util.Calendar.getInstance().apply {
+                timeInMillis = now
+                add(java.util.Calendar.WEEK_OF_YEAR, -offset)
+                set(java.util.Calendar.DAY_OF_WEEK, firstDayOfWeek)
+                set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+            }
+            val from = c.timeInMillis
+            c.add(java.util.Calendar.DAY_OF_YEAR, 7)
+            "${4 - offset} нед." to sessions.count { it.startedAtMillis >= from && it.startedAtMillis < c.timeInMillis }
+        }
+        "Год" -> (11 downTo 0).map { offset ->
+            val c = java.util.Calendar.getInstance().apply {
+                timeInMillis = now
+                add(java.util.Calendar.MONTH, -offset)
+                set(java.util.Calendar.DAY_OF_MONTH, 1)
+                set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+            }
+            val from = c.timeInMillis
+            c.add(java.util.Calendar.MONTH, 1)
+            SimpleDateFormat("LLL", Locale("ru")).format(Date(from)).replaceFirstChar { it.uppercase() } to
+                sessions.count { it.startedAtMillis >= from && it.startedAtMillis < c.timeInMillis }
+        }
+        else -> (6 downTo 0).map { offset ->
+            val c = java.util.Calendar.getInstance().apply {
+                timeInMillis = now
+                add(java.util.Calendar.DAY_OF_YEAR, -offset)
+                set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+            }
+            val from = c.timeInMillis
+            c.add(java.util.Calendar.DAY_OF_YEAR, 1)
+            SimpleDateFormat("EE", Locale("ru")).format(Date(from)).replaceFirstChar { it.uppercase() } to
+                sessions.count { it.startedAtMillis >= from && it.startedAtMillis < c.timeInMillis }
+        }
+    }
+}
+
+@Composable
+private fun WorkoutProgressChart(buckets: List<Pair<String, Int>>) {
+    val colors = AppTheme.colors
+    val maximum = (buckets.maxOfOrNull { it.second } ?: 0).coerceAtLeast(1)
+    Row(Modifier.fillMaxWidth().height(174.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.Bottom) {
+        buckets.forEach { (label, value) ->
+            Column(Modifier.weight(1f).fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom) {
+                Text(if (value > 0) value.toString() else "", color = colors.textSecondary,
+                    style = AppTheme.type.caption)
+                Spacer(Modifier.height(5.dp))
+                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.BottomCenter) {
+                    Box(Modifier.fillMaxWidth(0.72f)
+                        .fillMaxHeight((value.toFloat() / maximum).coerceAtLeast(if (value > 0) 0.08f else 0f))
+                        .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
+                        .background(colors.accent))
+                }
+                Spacer(Modifier.height(7.dp))
+                Text(label, color = colors.textSecondary, style = AppTheme.type.caption, maxLines = 1)
+            }
+        }
+    }
+    if (buckets.all { it.second == 0 }) Text("Пока нет завершённых тренировок за этот период",
+        color = colors.textSecondary, style = AppTheme.type.caption)
 }
