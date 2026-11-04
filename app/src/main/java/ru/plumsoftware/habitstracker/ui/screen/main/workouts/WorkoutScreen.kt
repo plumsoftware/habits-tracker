@@ -20,11 +20,38 @@ import ru.plumsoftware.habitstracker.data.model.WorkoutSession
 import ru.plumsoftware.habitstracker.data.model.WorkoutSet
 import ru.plumsoftware.habitstracker.ui.components.AppScreenTopBar
 import ru.plumsoftware.habitstracker.ui.components.PrimaryButton
+import ru.plumsoftware.habitstracker.ui.components.PillChip
 import ru.plumsoftware.habitstracker.ui.components.clickableNoRipple
 import ru.plumsoftware.habitstracker.ui.theme.AppTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private enum class WorkoutRoute { HOME, EDITOR, HISTORY, TEMPLATES, SETTINGS, PROGRESS, EXERCISE_PICKER, DETAIL }
+
+private data class WorkoutTemplate(
+    val title: String, val subtitle: String, val duration: String, val icon: String,
+    val exercises: List<String>,
+)
+
+private val workoutTemplates = listOf(
+    WorkoutTemplate("Силовая тренировка", "Базовый комплекс для всего тела", "45 мин", "💪",
+        listOf("Приседания", "Отжимания", "Планка", "Выпады", "Скручивания", "Подъёмы гантелей")),
+    WorkoutTemplate("Кардио тренировка", "Бег, прыжки и активная нагрузка", "30 мин", "👟",
+        listOf("Бег на месте", "Прыжки", "Берпи", "Планка", "Выпады", "Скакалка")),
+    WorkoutTemplate("Пресс", "Упражнения на пресс и кор", "20 мин", "🏅",
+        listOf("Скручивания", "Подъёмы ног", "Планка", "Велосипед", "Русские скручивания")),
+    WorkoutTemplate("Растяжка", "Гибкость и мобильность", "15 мин", "🧘",
+        listOf("Наклоны", "Растяжка ног", "Повороты корпуса", "Растяжка плеч")),
+    WorkoutTemplate("Функциональная", "Комплексная тренировка", "40 мин", "🏋️",
+        listOf("Приседания", "Отжимания", "Выпады", "Планка", "Берпи", "Подтягивания")),
+)
+
+private val exerciseCatalog = listOf(
+    "Приседания", "Отжимания", "Планка", "Выпады", "Скручивания", "Подтягивания",
+    "Берпи", "Бег на месте", "Прыжки", "Подъёмы ног", "Жим гантелей", "Тяга гантелей",
+    "Разведение рук", "Ягодичный мостик", "Велосипед", "Растяжка",
+)
 
 @Composable
 fun WorkoutScreen(onBack: () -> Unit) {
@@ -32,175 +59,432 @@ fun WorkoutScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val colors = AppTheme.colors
     val sessions by repository.workouts().collectAsState(initial = emptyList())
+    var route by remember { mutableStateOf(WorkoutRoute.HOME) }
     var selectedId by remember { mutableStateOf<String?>(null) }
-    var startDialog by remember { mutableStateOf(false) }
-    var exerciseDialog by remember { mutableStateOf(false) }
-    var workoutTitle by remember { mutableStateOf("Силовая тренировка") }
+    var title by remember { mutableStateOf("Моя тренировка") }
     var exerciseName by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
+    var search by remember { mutableStateOf("") }
+    var showCustomWorkoutDialog by remember { mutableStateOf(false) }
+    var showDeleteWorkoutDialog by remember { mutableStateOf(false) }
+    var filter by remember { mutableStateOf("Все") }
 
     val active = sessions.firstOrNull { it.endedAtMillis == null }
-    val selected = sessions.firstOrNull { it.id == (selectedId ?: active?.id) }
-    val exercises by repository.exercises(selected?.id.orEmpty()).collectAsState(initial = emptyList())
-    LaunchedEffect(selected?.id) { notes = selected?.notes.orEmpty() }
+    val selected = sessions.firstOrNull { it.id == selectedId }
+    val editorSession = selected ?: active
+    val exercises by repository.exercises(editorSession?.id.orEmpty()).collectAsState(initial = emptyList())
+    val detailExercises by repository.exercises(selectedId.orEmpty()).collectAsState(initial = emptyList())
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(colors.bgScreen),
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 36.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        item {
-            AppScreenTopBar("Тренировки", onBack)
-            Text("Записывай упражнения, подходы и прогресс",
-                color = colors.textSecondary, style = AppTheme.type.bodyS)
+    fun openEditor(id: String) {
+        selectedId = id
+        route = WorkoutRoute.EDITOR
+    }
+    fun startTemplate(template: WorkoutTemplate) {
+        scope.launch {
+            val id = repository.startWorkout(template.title)
+            template.exercises.forEach { repository.addExercise(id, it) }
+            selectedId = id
+            route = WorkoutRoute.EDITOR
         }
+    }
 
-        if (selected == null) {
-            item {
-                Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
-                        .background(colors.accentSoft).padding(22.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text("🏋️", fontSize = 54.sp)
-                    Text("Готов к тренировке?", color = colors.textPrimary,
-                        style = AppTheme.type.h2)
-                    Text("Выбери шаблон или создай свою тренировку. Фиксируй подходы и следи за прогрессом.",
+    Column(Modifier.fillMaxSize().background(colors.bgScreen)) {
+        AppScreenTopBar(
+            title = when (route) {
+                WorkoutRoute.HOME -> "Тренировки"
+                WorkoutRoute.EDITOR -> editorSession?.title ?: "Создать тренировку"
+                WorkoutRoute.HISTORY -> "История"
+                WorkoutRoute.TEMPLATES -> "Шаблоны"
+                WorkoutRoute.SETTINGS -> "Настройки"
+                WorkoutRoute.PROGRESS -> "Прогресс"
+                WorkoutRoute.EXERCISE_PICKER -> "Добавить упражнение"
+                WorkoutRoute.DETAIL -> selected?.title ?: "Тренировка"
+            },
+            onBack = {
+                when (route) {
+                    WorkoutRoute.HOME -> onBack()
+                    WorkoutRoute.EDITOR -> if (editorSession?.endedAtMillis != null) route = WorkoutRoute.DETAIL else route = WorkoutRoute.HOME
+                    WorkoutRoute.HISTORY, WorkoutRoute.TEMPLATES, WorkoutRoute.SETTINGS, WorkoutRoute.PROGRESS -> route = WorkoutRoute.HOME
+                    WorkoutRoute.EXERCISE_PICKER -> route = WorkoutRoute.EDITOR
+                    WorkoutRoute.DETAIL -> route = WorkoutRoute.HISTORY
+                }
+            },
+        )
+
+        when (route) {
+            WorkoutRoute.HOME -> LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                item {
+                    Text("Записывай упражнения, подходы и прогресс",
                         color = colors.textSecondary, style = AppTheme.type.bodyS)
-                    PrimaryButton("Начать тренировку", onClick = { startDialog = true })
+                }
+                if (active != null) item {
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp))
+                            .background(colors.accentSoft).padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text("🏋️", fontSize = 44.sp)
+                        Text("Тренировка продолжается", color = colors.textPrimary, style = AppTheme.type.h2)
+                        Text(active.title, color = colors.textSecondary, style = AppTheme.type.bodyS)
+                        PrimaryButton("Продолжить", onClick = { openEditor(active.id) })
+                    }
+                } else item {
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp))
+                            .background(colors.accentSoft).padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text("🏋️", fontSize = 48.sp)
+                        Text("Готов к тренировке?", color = colors.textPrimary, style = AppTheme.type.h2)
+                        Text("Выбери шаблон или собери собственную программу",
+                            color = colors.textSecondary, style = AppTheme.type.bodyS)
+                        PrimaryButton("＋ Создать тренировку", onClick = {
+                            title = "Моя тренировка"; showCustomWorkoutDialog = true
+                        })
+                    }
+                }
+                item { SectionHeading("Разделы") }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        NavigationTile("▤", "История", Modifier.weight(1f)) { route = WorkoutRoute.HISTORY }
+                        NavigationTile("▦", "Шаблоны", Modifier.weight(1f)) { route = WorkoutRoute.TEMPLATES }
+                    }
+                }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        NavigationTile("↗", "Прогресс", Modifier.weight(1f)) { route = WorkoutRoute.PROGRESS }
+                        NavigationTile("⚙", "Настройки", Modifier.weight(1f)) { route = WorkoutRoute.SETTINGS }
+                    }
+                }
+                item { SectionHeading("Шаблоны тренировок") }
+                items(workoutTemplates.take(3)) { template ->
+                    TemplateCard(template) { startTemplate(template) }
+                }
+                item {
+                    TextButton(onClick = { route = WorkoutRoute.TEMPLATES }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Все шаблоны →")
+                    }
+                }
+                item { SectionHeading("Последние тренировки") }
+                val history = sessions.filter { it.endedAtMillis != null }.take(3)
+                if (history.isEmpty()) item { EmptyHint("Завершённые тренировки появятся здесь") }
+                items(history, key = { "recent_${it.id}" }) { session ->
+                    SessionCard(session) { selectedId = session.id; route = WorkoutRoute.DETAIL }
+                }
+                item { Spacer(Modifier.height(24.dp)) }
+            }
+
+            WorkoutRoute.TEMPLATES -> LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item { Text("Выбери готовую программу или начни с пустой тренировки",
+                    color = colors.textSecondary, style = AppTheme.type.bodyS) }
+                items(workoutTemplates) { template -> TemplateCard(template) { startTemplate(template) } }
+                item {
+                    OutlinedButton(onClick = {
+                        title = "Моя тренировка"; showCustomWorkoutDialog = true
+                    }, modifier = Modifier.fillMaxWidth()) { Text("＋ Создать свою") }
                 }
             }
-            item { SectionTitle("Шаблоны тренировок") }
-            item { TemplateCard("💪", "Силовая тренировка", "45 мин  ·  8 упражнений") { workoutTitle = "Силовая тренировка"; startDialog = true } }
-            item { TemplateCard("❤️", "Кардио тренировка", "30 мин  ·  6 упражнений") { workoutTitle = "Кардио тренировка"; startDialog = true } }
-            item { TemplateCard("🧘", "Растяжка", "15 мин  ·  6 упражнений") { workoutTitle = "Растяжка"; startDialog = true } }
-        } else {
-            item {
-                Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp))
-                        .background(colors.surface).padding(18.dp),
+
+            WorkoutRoute.EDITOR -> {
+                if (editorSession == null) {
+                    EmptyHint("Тренировка не найдена")
+                } else LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text(selected.title, color = colors.textPrimary, style = AppTheme.type.h2)
-                    Text("Начата · ${formatDate(selected.startedAtMillis)}",
-                        color = colors.textSecondary, style = AppTheme.type.caption)
-                    OutlinedTextField(
-                        value = notes, onValueChange = { notes = it; scope.launch { repository.updateNotes(selected.id, it) } },
-                        modifier = Modifier.fillMaxWidth(), label = { Text("Заметки") }, minLines = 2,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(onClick = { exerciseDialog = true }, modifier = Modifier.weight(1f)) {
-                            Text("＋ Упражнение")
-                        }
-                        OutlinedButton(onClick = {
-                            scope.launch { repository.finishWorkout(selected.id); selectedId = null }
-                        }, modifier = Modifier.weight(1f)) { Text("Завершить") }
-                    }
-                }
-            }
-            item { SectionTitle("Упражнения · ${exercises.size}") }
-            if (exercises.isEmpty()) {
-                item { Text("Добавь первое упражнение, чтобы начать вести тренировку.",
-                    color = colors.textSecondary, style = AppTheme.type.bodyS) }
-            }
-            items(exercises, key = { it.id }) { exercise ->
-                val sets by repository.sets(exercise.id).collectAsState(initial = emptyList())
-                Column(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
-                        .background(colors.surface).padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(exercise.name, modifier = Modifier.weight(1f),
-                            color = colors.textPrimary, style = AppTheme.type.h4)
-                        TextButton(onClick = { scope.launch { repository.deleteExercise(exercise.id) } }) {
-                            Text("Удалить", color = colors.danger)
+                    item {
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
+                            .background(colors.surface).padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(editorSession.title, color = colors.textPrimary, style = AppTheme.type.h2)
+                            Text("Начата · ${formatDate(editorSession.startedAtMillis)}",
+                                color = colors.textSecondary, style = AppTheme.type.caption)
+                            if (editorSession.endedAtMillis == null) {
+                                PrimaryButton("＋ Добавить упражнение", onClick = { route = WorkoutRoute.EXERCISE_PICKER })
+                                OutlinedButton(onClick = { showDeleteWorkoutDialog = true },
+                                    modifier = Modifier.fillMaxWidth()) { Text("Завершить тренировку") }
+                            } else {
+                                Text("Тренировка завершена · ${duration(editorSession)}",
+                                    color = colors.success, style = AppTheme.type.bodyS)
+                            }
                         }
                     }
-                    sets.forEach { set ->
-                        WorkoutSetEditor(
-                            set = set,
-                            onChange = { updated -> scope.launch { repository.updateSet(updated) } },
-                            onDelete = { scope.launch { repository.deleteSet(set.id) } },
+                    item { SectionHeading("Упражнения · ${exercises.size}") }
+                    if (exercises.isEmpty()) item { EmptyHint("Добавь упражнения в тренировку") }
+                    items(exercises, key = { it.id }) { exercise ->
+                        val sets by repository.sets(exercise.id).collectAsState(initial = emptyList())
+                        ExerciseCard(
+                            name = exercise.name, sets = sets,
+                            editable = editorSession.endedAtMillis == null,
+                            onAddSet = { scope.launch { repository.addSet(exercise.id) } },
+                            onUpdate = { scope.launch { repository.updateSet(it) } },
+                            onDeleteSet = { scope.launch { repository.deleteSet(it) } },
+                            onDeleteExercise = { scope.launch { repository.deleteExercise(exercise.id) } },
                         )
                     }
-                    OutlinedButton(
-                        onClick = { scope.launch { repository.addSet(exercise.id) } },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("＋ Добавить подход") }
+                    item { Spacer(Modifier.height(24.dp)) }
                 }
             }
-        }
 
-        item { SectionTitle("История тренировок") }
-        val history = sessions.filter { it.endedAtMillis != null }
-        if (history.isEmpty()) {
-            item { Text("Здесь появятся завершённые тренировки", color = colors.textSecondary) }
-        } else {
-            items(history, key = { "history_${it.id}" }) { session ->
-                TemplateCard("🏋️", session.title,
-                    "${formatDate(session.startedAtMillis)}  ·  ${duration(session)}") {
-                    selectedId = session.id
+            WorkoutRoute.EXERCISE_PICKER -> {
+                var query by remember { mutableStateOf("") }
+                LazyColumn(Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    item {
+                        OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(),
+                            singleLine = true, label = { Text("Поиск упражнений") })
+                    }
+                    items(exerciseCatalog.filter { it.contains(query, ignoreCase = true) }) { name ->
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                            .background(colors.surface).clickableNoRipple {
+                                val sessionId = editorSession?.id ?: return@clickableNoRipple
+                                scope.launch { repository.addExercise(sessionId, name); route = WorkoutRoute.EDITOR }
+                            }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("🏃", fontSize = 24.sp)
+                            Text(name, modifier = Modifier.weight(1f).padding(start = 12.dp),
+                                color = colors.textPrimary, style = AppTheme.type.bodyL)
+                            Text("＋", color = colors.accent, fontSize = 24.sp)
+                        }
+                    }
+                    item {
+                        OutlinedTextField(exerciseName, { exerciseName = it }, modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Своё упражнение") }, singleLine = true)
+                        PrimaryButton("Добавить своё упражнение", enabled = exerciseName.isNotBlank(),
+                            onClick = {
+                                val sessionId = editorSession?.id ?: return@PrimaryButton
+                                scope.launch { repository.addExercise(sessionId, exerciseName); exerciseName = ""; route = WorkoutRoute.EDITOR }
+                            })
+                    }
+                }
+            }
+
+            WorkoutRoute.HISTORY -> {
+                val history = sessions.filter { it.endedAtMillis != null }
+                Column(Modifier.fillMaxSize()) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("Все", "Силовые", "Кардио", "Пресс").forEach { value ->
+                            PillChip(value, if (filter == value) colors.accent else colors.surface,
+                                if (filter == value) colors.inkOn else colors.textSecondary,
+                                onClick = { filter = value })
+                        }
+                    }
+                    LazyColumn(contentPadding = PaddingValues(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        val filtered = history.filter {
+                            filter == "Все" || when (filter) {
+                                "Силовые" -> it.title.contains("сил", true)
+                                "Кардио" -> it.title.contains("кардио", true)
+                                else -> it.title.contains("пресс", true)
+                            }
+                        }
+                        if (filtered.isEmpty()) item { EmptyHint("Пока нет тренировок в этой категории") }
+                        items(filtered, key = { it.id }) { session ->
+                            SessionCard(session) { selectedId = session.id; route = WorkoutRoute.DETAIL }
+                        }
+                    }
+                }
+            }
+
+            WorkoutRoute.DETAIL -> {
+                if (selected == null) EmptyHint("Тренировка не найдена")
+                else LazyColumn(Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    item {
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
+                            .background(colors.accentSoft).padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("🏋️", fontSize = 44.sp)
+                            Text(selected.title, color = colors.textPrimary, style = AppTheme.type.h2)
+                            Text("${formatDate(selected.startedAtMillis)} · ${duration(selected)}",
+                                color = colors.textSecondary, style = AppTheme.type.bodyS)
+                            if (selected.notes.isNotBlank()) Text(selected.notes,
+                                color = colors.textSecondary, style = AppTheme.type.bodyS)
+                        }
+                    }
+                    item { SectionHeading("Упражнения") }
+                    items(detailExercises, key = { it.id }) { exercise ->
+                        val sets by repository.sets(exercise.id).collectAsState(initial = emptyList())
+                        ExerciseCard(exercise.name, sets, false, {}, {}, {}, {})
+                    }
+                    item {
+                        OutlinedButton(onClick = { showDeleteWorkoutDialog = true },
+                            modifier = Modifier.fillMaxWidth()) { Text("Удалить тренировку") }
+                    }
+                }
+            }
+
+            WorkoutRoute.SETTINGS -> LazyColumn(Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                item { SectionHeading("Общие") }
+                item { SettingInfoCard("🔔", "Уведомления", "Напоминания о тренировках") }
+                item { SettingInfoCard("🌙", "Тема", "Используется тема приложения") }
+                item { SectionHeading("Данные") }
+                item { SettingInfoCard("💾", "Хранение", "Тренировки сохраняются локально на устройстве") }
+                item { SettingInfoCard("🔒", "Приватность", "Данные тренировок не отправляются в облако") }
+            }
+
+            WorkoutRoute.PROGRESS -> {
+                val completed = sessions.filter { it.endedAtMillis != null }
+                val totalMinutes = completed.sumOf {
+                    ((it.endedAtMillis ?: it.startedAtMillis) - it.startedAtMillis).coerceAtLeast(0L) / 60_000L
+                }
+                LazyColumn(Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    item { SectionHeading("Твоя статистика") }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            StatCard(completed.size.toString(), "Тренировок", Modifier.weight(1f))
+                            StatCard(totalMinutes.toString(), "Минут", Modifier.weight(1f))
+                        }
+                    }
+                    item {
+                        val average = if (completed.isEmpty()) 0 else totalMinutes / completed.size
+                        StatCard(average.toString(), "Средняя длительность, мин", Modifier.fillMaxWidth())
+                    }
+                    item { SectionHeading("Последние занятия") }
+                    items(completed.take(7), key = { it.id }) { session ->
+                        SessionCard(session) { selectedId = session.id; route = WorkoutRoute.DETAIL }
+                    }
+                    if (completed.isEmpty()) item { EmptyHint("Заверши первую тренировку — здесь появится статистика") }
                 }
             }
         }
     }
 
-    if (startDialog) {
+    if (showCustomWorkoutDialog) {
         AlertDialog(
-            onDismissRequest = { startDialog = false },
+            onDismissRequest = { showCustomWorkoutDialog = false },
             title = { Text("Новая тренировка") },
-            text = {
-                OutlinedTextField(value = workoutTitle, onValueChange = { workoutTitle = it },
-                    label = { Text("Название") }, singleLine = true)
-            },
+            text = { OutlinedTextField(title, { title = it }, label = { Text("Название") }, singleLine = true) },
             confirmButton = {
                 TextButton(onClick = {
-                    scope.launch { selectedId = repository.startWorkout(workoutTitle); startDialog = false }
-                }) { Text("Начать") }
+                    scope.launch {
+                        val id = repository.startWorkout(title)
+                        selectedId = id
+                        showCustomWorkoutDialog = false
+                        route = WorkoutRoute.EDITOR
+                    }
+                }, enabled = title.isNotBlank()) { Text("Создать") }
             },
-            dismissButton = { TextButton(onClick = { startDialog = false }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = { showCustomWorkoutDialog = false }) { Text("Отмена") } },
         )
     }
-    if (exerciseDialog && selected != null) {
+
+    if (showDeleteWorkoutDialog) {
         AlertDialog(
-            onDismissRequest = { exerciseDialog = false; exerciseName = "" },
-            title = { Text("Новое упражнение") },
-            text = {
-                OutlinedTextField(value = exerciseName, onValueChange = { exerciseName = it },
-                    label = { Text("Название упражнения") }, singleLine = true)
-            },
+            onDismissRequest = { showDeleteWorkoutDialog = false },
+            title = { Text(if (editorSession?.endedAtMillis == null && route == WorkoutRoute.EDITOR) "Завершить тренировку?" else "Удалить тренировку?") },
+            text = { Text(if (editorSession?.endedAtMillis == null && route == WorkoutRoute.EDITOR)
+                "Тренировка сохранится в истории." else "Тренировка и её упражнения будут удалены.") },
             confirmButton = {
-                TextButton(enabled = exerciseName.isNotBlank(), onClick = {
-                    scope.launch { repository.addExercise(selected.id, exerciseName); exerciseName = ""; exerciseDialog = false }
-                }) { Text("Добавить") }
+                TextButton(onClick = {
+                    val id = selectedId
+                    scope.launch {
+                        if (id != null) {
+                            if (route == WorkoutRoute.EDITOR && editorSession?.endedAtMillis == null) {
+                                repository.finishWorkout(id)
+                                route = WorkoutRoute.HOME
+                            } else {
+                                repository.deleteWorkout(id)
+                                selectedId = null
+                                route = WorkoutRoute.HISTORY
+                            }
+                        }
+                        showDeleteWorkoutDialog = false
+                    }
+                }) { Text(if (route == WorkoutRoute.EDITOR && editorSession?.endedAtMillis == null) "Завершить" else "Удалить") }
             },
-            dismissButton = { TextButton(onClick = { exerciseDialog = false }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = { showDeleteWorkoutDialog = false }) { Text("Отмена") } },
         )
     }
 }
 
 @Composable
-private fun SectionTitle(text: String) {
+private fun SectionHeading(text: String) {
     Text(text, color = AppTheme.colors.textPrimary, style = AppTheme.type.h3)
 }
 
 @Composable
-private fun TemplateCard(icon: String, title: String, subtitle: String, onClick: () -> Unit) {
+private fun NavigationTile(icon: String, title: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val colors = AppTheme.colors
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(colors.surface)
-            .clickableNoRipple(onClick).padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
+    Column(modifier.clip(RoundedCornerShape(20.dp)).background(colors.surface)
+        .clickableNoRipple(onClick).padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(icon, color = colors.accent, fontSize = 24.sp)
+        Text(title, color = colors.textPrimary, style = AppTheme.type.bodyL, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun TemplateCard(template: WorkoutTemplate, onClick: () -> Unit) {
+    val colors = AppTheme.colors
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(colors.surface)
+        .clickableNoRipple(onClick).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
         Box(Modifier.size(54.dp).clip(RoundedCornerShape(17.dp)).background(colors.accentSoft),
-            contentAlignment = Alignment.Center) { Text(icon, fontSize = 29.sp) }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, color = colors.textPrimary, style = AppTheme.type.bodyL, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, color = colors.textSecondary, style = AppTheme.type.caption)
+            contentAlignment = Alignment.Center) { Text(template.icon, fontSize = 28.sp) }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(template.title, color = colors.textPrimary, style = AppTheme.type.bodyL, fontWeight = FontWeight.SemiBold)
+            Text(template.subtitle, color = colors.textSecondary, style = AppTheme.type.caption)
+            Text("${template.duration} · ${template.exercises.size} упр.",
+                color = colors.textSecondary, style = AppTheme.type.caption)
         }
-        Text("›", color = colors.accent, fontSize = 30.sp)
+        Text("›", color = colors.accent, fontSize = 28.sp)
+    }
+}
+
+@Composable
+private fun SessionCard(session: WorkoutSession, onClick: () -> Unit) {
+    val colors = AppTheme.colors
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(colors.surface)
+        .clickableNoRipple(onClick).padding(15.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.size(48.dp).clip(RoundedCornerShape(15.dp)).background(colors.accentSoft),
+            contentAlignment = Alignment.Center) { Text("🏋️", fontSize = 25.sp) }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(session.title, color = colors.textPrimary, style = AppTheme.type.bodyL, fontWeight = FontWeight.SemiBold)
+            Text("${formatDate(session.startedAtMillis)} · ${duration(session)}",
+                color = colors.textSecondary, style = AppTheme.type.caption)
+        }
+        Text("›", color = colors.accent, fontSize = 28.sp)
+    }
+}
+
+@Composable
+private fun ExerciseCard(
+    name: String, sets: List<WorkoutSet>, editable: Boolean,
+    onAddSet: () -> Unit, onUpdate: (WorkoutSet) -> Unit,
+    onDeleteSet: (String) -> Unit, onDeleteExercise: () -> Unit,
+) {
+    val colors = AppTheme.colors
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(colors.surface).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(name, modifier = Modifier.weight(1f), color = colors.textPrimary, style = AppTheme.type.h4)
+            if (editable) TextButton(onClick = onDeleteExercise) { Text("Удалить", color = colors.danger) }
+        }
+        if (sets.isEmpty()) Text("Подходы ещё не добавлены", color = colors.textSecondary, style = AppTheme.type.caption)
+        sets.forEach { set ->
+            if (editable) WorkoutSetEditor(set, onUpdate) { onDeleteSet(set.id) }
+            else Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(colors.bgScreen).padding(10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Подход ${set.setNumber}", color = colors.textSecondary)
+                Text("${set.reps} повт. · ${set.weightKg} кг", color = colors.textPrimary)
+            }
+        }
+        if (editable) OutlinedButton(onClick = onAddSet, modifier = Modifier.fillMaxWidth()) {
+            Text("＋ Добавить подход")
+        }
     }
 }
 
@@ -209,11 +493,8 @@ private fun WorkoutSetEditor(set: WorkoutSet, onChange: (WorkoutSet) -> Unit, on
     val colors = AppTheme.colors
     var reps by remember(set.id) { mutableStateOf(set.reps.toString()) }
     var weight by remember(set.id) { mutableStateOf(set.weightKg.toString()) }
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(colors.bgScreen).padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
-    ) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(colors.bgScreen).padding(7.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("${set.setNumber}", color = colors.accent, fontWeight = FontWeight.Bold)
         OutlinedTextField(reps, { value ->
             reps = value.filter(Char::isDigit)
@@ -228,6 +509,36 @@ private fun WorkoutSetEditor(set: WorkoutSet, onChange: (WorkoutSet) -> Unit, on
         }
         TextButton(onClick = onDelete) { Text("×", color = colors.danger) }
     }
+}
+
+@Composable
+private fun SettingInfoCard(icon: String, title: String, subtitle: String) {
+    val colors = AppTheme.colors
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(colors.surface).padding(15.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(icon, fontSize = 24.sp)
+        Column {
+            Text(title, color = colors.textPrimary, style = AppTheme.type.bodyL)
+            Text(subtitle, color = colors.textSecondary, style = AppTheme.type.caption)
+        }
+    }
+}
+
+@Composable
+private fun StatCard(value: String, label: String, modifier: Modifier = Modifier) {
+    val colors = AppTheme.colors
+    Column(modifier.clip(RoundedCornerShape(18.dp)).background(colors.surface).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text(value, color = colors.accent, style = AppTheme.type.h2)
+        Text(label, color = colors.textSecondary, style = AppTheme.type.caption)
+    }
+}
+
+@Composable
+private fun EmptyHint(text: String) {
+    Text(text, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+        .background(AppTheme.colors.surface).padding(18.dp),
+        color = AppTheme.colors.textSecondary, style = AppTheme.type.bodyS)
 }
 
 private fun formatDate(time: Long): String =
