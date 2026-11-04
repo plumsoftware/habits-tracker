@@ -491,7 +491,7 @@ private fun SectionHeading(text: String) {
 private fun NavigationTile(icon: String, title: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val colors = AppTheme.colors
     Column(modifier.clip(RoundedCornerShape(20.dp)).background(colors.surface)
-        .clickableNoRipple(onClick).padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        .clickableNoRipple(onClick = onClick).padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(icon, color = colors.accent, fontSize = 24.sp)
         Text(title, color = colors.textPrimary, style = AppTheme.type.bodyL, fontWeight = FontWeight.SemiBold)
     }
@@ -501,7 +501,7 @@ private fun NavigationTile(icon: String, title: String, modifier: Modifier = Mod
 private fun TemplateCard(template: WorkoutTemplate, onClick: () -> Unit) {
     val colors = AppTheme.colors
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(colors.surface)
-        .clickableNoRipple(onClick).padding(14.dp),
+        .clickableNoRipple(onClick = onClick).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
         Box(Modifier.size(60.dp).clip(RoundedCornerShape(17.dp)).background(colors.accentSoft),
             contentAlignment = Alignment.Center) {
@@ -521,7 +521,7 @@ private fun TemplateCard(template: WorkoutTemplate, onClick: () -> Unit) {
 private fun SessionCard(session: WorkoutSession, onClick: () -> Unit) {
     val colors = AppTheme.colors
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(colors.surface)
-        .clickableNoRipple(onClick).padding(15.dp),
+        .clickableNoRipple(onClick = onClick).padding(15.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.size(48.dp).clip(RoundedCornerShape(15.dp)).background(colors.accentSoft),
             contentAlignment = Alignment.Center) { Text("🏋️", fontSize = 25.sp) }
@@ -716,7 +716,7 @@ private fun RestTimerScreen(onFinish: () -> Unit) {
             contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(String.format(Locale.US, "%02d:%02d", remaining / 60, remaining % 60),
-                    color = colors.textPrimary, style = AppTheme.type.displayL)
+                    color = colors.textPrimary, style = AppTheme.type.displayS)
                 Text(if (remaining == 0) "Можно продолжать" else "Осталось",
                     color = colors.textSecondary, style = AppTheme.type.bodyS)
             }
