@@ -67,6 +67,10 @@ fun WorkoutScreen(onBack: () -> Unit) {
     var search by remember { mutableStateOf("") }
     var showCustomWorkoutDialog by remember { mutableStateOf(false) }
     var showDeleteWorkoutDialog by remember { mutableStateOf(false) }
+    var showRenameWorkoutDialog by remember { mutableStateOf(false) }
+    var renameValue by remember { mutableStateOf("") }
+    var clockTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(active?.id) { while (active != null) { delay(1_000); clockTick = System.currentTimeMillis() } }
     var filter by remember { mutableStateOf("Все") }
 
     val active = sessions.firstOrNull { it.endedAtMillis == null }
@@ -132,6 +136,7 @@ fun WorkoutScreen(onBack: () -> Unit) {
                         Text("🏋️", fontSize = 44.sp)
                         Text("Тренировка продолжается", color = colors.textPrimary, style = AppTheme.type.h2)
                         Text(active.title, color = colors.textSecondary, style = AppTheme.type.bodyS)
+                        Text("Время: ${durationAt(active, clockTick)}", color = colors.textSecondary, style = AppTheme.type.caption)
                         PrimaryButton("Продолжить", onClick = { openEditor(active.id) })
                     }
                 } else item {
@@ -207,7 +212,10 @@ fun WorkoutScreen(onBack: () -> Unit) {
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
                             .background(colors.surface).padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(editorSession.title, color = colors.textPrimary, style = AppTheme.type.h2)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(editorSession.title, modifier = Modifier.weight(1f), color = colors.textPrimary, style = AppTheme.type.h2)
+                                if (editorSession.endedAtMillis == null) TextButton(onClick = { renameValue = editorSession.title; showRenameWorkoutDialog = true }) { Text("Изменить") }
+                            }
                             Text("Начата · ${formatDate(editorSession.startedAtMillis)}",
                                 color = colors.textSecondary, style = AppTheme.type.caption)
                             if (editorSession.endedAtMillis == null) {
@@ -402,6 +410,22 @@ fun WorkoutScreen(onBack: () -> Unit) {
                 }
             }
         }
+    }
+
+    if (showRenameWorkoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showRenameWorkoutDialog = false },
+            title = { Text("Название тренировки") },
+            text = { OutlinedTextField(renameValue, { renameValue = it }, singleLine = true, label = { Text("Название") }) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = editorSession?.id
+                    if (id != null && renameValue.isNotBlank()) scope.launch { repository.renameWorkout(id, renameValue) }
+                    showRenameWorkoutDialog = false
+                }, enabled = renameValue.isNotBlank()) { Text("Сохранить") }
+            },
+            dismissButton = { TextButton(onClick = { showRenameWorkoutDialog = false }) { Text("Отмена") } },
+        )
     }
 
     if (showCustomWorkoutDialog) {
@@ -696,4 +720,10 @@ private fun RestTimerScreen(onFinish: () -> Unit) {
         TextButton(onClick = { remaining = 60; running = true }) { Text("Сбросить таймер") }
         TextButton(onClick = onFinish) { Text("Вернуться к тренировке") }
     }
+}
+
+private fun durationAt(session: WorkoutSession, now: Long): String {
+    val end = session.endedAtMillis ?: now
+    val minutes = ((end - session.startedAtMillis).coerceAtLeast(0L) / 60_000L).toInt()
+    return if (minutes >= 60) "${minutes / 60} ч ${minutes % 60} мин" else "$minutes мин"
 }
