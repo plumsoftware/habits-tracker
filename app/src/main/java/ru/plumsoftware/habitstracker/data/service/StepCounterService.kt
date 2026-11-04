@@ -56,7 +56,7 @@ class StepCounterService : Service(), SensorEventListener {
         val lastTotal = prefs.getLong(KEY_LAST_TOTAL, -1L)
         val currentSteps = prefs.getInt(KEY_TODAY_STEPS, 0)
         val nextSteps = when {
-            savedDay != day -> 0
+            savedDay != day -> if (lastTotal >= 0L && total >= lastTotal) (total - lastTotal).toInt() else 0
             lastTotal < 0L || total < lastTotal -> currentSteps
             else -> (currentSteps + (total - lastTotal).toInt()).coerceAtLeast(0)
         }
