@@ -16,7 +16,7 @@ import ru.plumsoftware.habitstracker.data.model.dao.*
         Habit::class, HabitCompletion::class, Notification::class, Category::class,
         DailySteps::class, WorkoutSession::class, WorkoutExercise::class, WorkoutSet::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -91,6 +91,28 @@ abstract class HabitDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Повторно гарантирует наличие всех таблиц тренировок. Нужна для восстановления
+         * баз, созданных промежуточной версией 9, где была добавлена только workout_sessions.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS workout_sessions (id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, startedAtMillis INTEGER NOT NULL, endedAtMillis INTEGER, notes TEXT NOT NULL, createdAtMillis INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_sessions_startedAtMillis ON workout_sessions(startedAtMillis)")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS workout_exercises (
+                    id TEXT NOT NULL PRIMARY KEY, sessionId TEXT NOT NULL, name TEXT NOT NULL, sortOrder INTEGER NOT NULL,
+                    FOREIGN KEY(sessionId) REFERENCES workout_sessions(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_exercises_sessionId ON workout_exercises(sessionId)")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS workout_sets (
+                    id TEXT NOT NULL PRIMARY KEY, exerciseId TEXT NOT NULL, setNumber INTEGER NOT NULL,
+                    reps INTEGER NOT NULL, weightKg REAL NOT NULL, completed INTEGER NOT NULL,
+                    FOREIGN KEY(exerciseId) REFERENCES workout_exercises(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_sets_exerciseId ON workout_sets(exerciseId)")
+            }
+        }
+
         private fun seedBuiltInCategories(db: SupportSQLiteDatabase) {
             fun insertBuiltIn(id: String, name: String, color: Long, order: Int) {
                 db.execSQL("INSERT OR IGNORE INTO categories (id,name,colorArgb,isBuiltIn,sortOrder) VALUES (?,?,?,1,?)", arrayOf<Any>(id,name,color,order))
@@ -104,7 +126,7 @@ abstract class HabitDatabase : RoomDatabase() {
         val databaseModule = module {
             single<HabitDatabase> {
                 Room.databaseBuilder(androidContext(), HabitDatabase::class.java, "habit_database")
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)
