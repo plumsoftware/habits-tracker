@@ -1,5 +1,11 @@
 package ru.plumsoftware.habitstracker.ui.screen.main.workouts
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -497,8 +503,10 @@ private fun TemplateCard(template: WorkoutTemplate, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(colors.surface)
         .clickableNoRipple(onClick).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
-        Box(Modifier.size(54.dp).clip(RoundedCornerShape(17.dp)).background(colors.accentSoft),
-            contentAlignment = Alignment.Center) { Text(template.icon, fontSize = 28.sp) }
+        Box(Modifier.size(60.dp).clip(RoundedCornerShape(17.dp)).background(colors.accentSoft),
+            contentAlignment = Alignment.Center) {
+            WorkoutIllustration(when { template.title.contains("Кардио") -> 1; template.title.contains("Пресс") -> 3; else -> 0 }, Modifier.fillMaxSize().padding(2.dp))
+        }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(template.title, color = colors.textPrimary, style = AppTheme.type.bodyL, fontWeight = FontWeight.SemiBold)
             Text(template.subtitle, color = colors.textSecondary, style = AppTheme.type.caption)
@@ -536,7 +544,8 @@ private fun ExerciseCard(
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(colors.surface).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(name, modifier = Modifier.weight(1f), color = colors.textPrimary, style = AppTheme.type.h4)
+            WorkoutIllustration(exerciseIllustrationIndex(name), Modifier.size(54.dp))
+            Text(name, modifier = Modifier.weight(1f).padding(start = 8.dp), color = colors.textPrimary, style = AppTheme.type.h4)
             if (editable) TextButton(onClick = onDeleteExercise) { Text("Удалить", color = colors.danger) }
         }
         if (sets.isEmpty()) Text("Подходы ещё не добавлены", color = colors.textSecondary, style = AppTheme.type.caption)
@@ -726,4 +735,23 @@ private fun durationAt(session: WorkoutSession, now: Long): String {
     val end = session.endedAtMillis ?: now
     val minutes = ((end - session.startedAtMillis).coerceAtLeast(0L) / 60_000L).toInt()
     return if (minutes >= 60) "${minutes / 60} ч ${minutes % 60} мин" else "$minutes мин"
+}
+
+private fun exerciseIllustrationIndex(name: String): Int = when {
+    name.contains("присед", true) || name.contains("выпад", true) -> 2
+    name.contains("планк", true) || name.contains("отжим", true) || name.contains("берпи", true) -> 3
+    name.contains("бег", true) || name.contains("прыж", true) -> 1
+    else -> 0
+}
+
+@Composable
+private fun WorkoutIllustration(index: Int, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val image = remember(index) {
+        val sheet = BitmapFactory.decodeResource(context.resources, ru.plumsoftware.habitstracker.R.drawable.workout_assets)
+        val x = (index % 2) * 128
+        val y = (index / 2) * 128
+        Bitmap.createBitmap(sheet, x, y, 128, 128).asImageBitmap()
+    }
+    Image(bitmap = image, contentDescription = null, modifier = modifier, contentScale = ContentScale.Fit)
 }
