@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 import ru.plumsoftware.habitstracker.data.database.WellnessRepository
 import ru.plumsoftware.habitstracker.data.model.WorkoutSession
@@ -27,7 +28,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private enum class WorkoutRoute { HOME, EDITOR, HISTORY, TEMPLATES, SETTINGS, PROGRESS, EXERCISE_PICKER, DETAIL }
+private enum class WorkoutRoute { HOME, EDITOR, HISTORY, TEMPLATES, SETTINGS, PROGRESS, EXERCISE_PICKER, DETAIL, REST_TIMER }
 
 private data class WorkoutTemplate(
     val title: String, val subtitle: String, val duration: String, val icon: String,
@@ -98,6 +99,7 @@ fun WorkoutScreen(onBack: () -> Unit) {
                 WorkoutRoute.PROGRESS -> "Прогресс"
                 WorkoutRoute.EXERCISE_PICKER -> "Добавить упражнение"
                 WorkoutRoute.DETAIL -> selected?.title ?: "Тренировка"
+                WorkoutRoute.REST_TIMER -> "Отдых между подходами"
             },
             onBack = {
                 when (route) {
@@ -106,6 +108,7 @@ fun WorkoutScreen(onBack: () -> Unit) {
                     WorkoutRoute.HISTORY, WorkoutRoute.TEMPLATES, WorkoutRoute.SETTINGS, WorkoutRoute.PROGRESS -> route = WorkoutRoute.HOME
                     WorkoutRoute.EXERCISE_PICKER -> route = WorkoutRoute.EDITOR
                     WorkoutRoute.DETAIL -> route = WorkoutRoute.HISTORY
+                    WorkoutRoute.REST_TIMER -> route = WorkoutRoute.EDITOR
                 }
             },
         )
@@ -218,6 +221,21 @@ fun WorkoutScreen(onBack: () -> Unit) {
                         }
                     }
                     item { SectionHeading("Упражнения · ${exercises.size}") }
+                    if (editorSession.endedAtMillis == null) item {
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                                .background(colors.surface).clickableNoRipple { route = WorkoutRoute.REST_TIMER }
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("◷", color = colors.accent, fontSize = 25.sp)
+                            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                                Text("Таймер отдыха", color = colors.textPrimary, style = AppTheme.type.bodyL)
+                                Text("60 секунд между подходами", color = colors.textSecondary, style = AppTheme.type.caption)
+                            }
+                            Text("›", color = colors.accent, fontSize = 28.sp)
+                        }
+                    }
                     if (exercises.isEmpty()) item { EmptyHint("Добавь упражнения в тренировку") }
                     items(exercises, key = { it.id }) { exercise ->
                         val sets by repository.sets(exercise.id).collectAsState(initial = emptyList())
@@ -333,6 +351,8 @@ fun WorkoutScreen(onBack: () -> Unit) {
                 item { SettingInfoCard("💾", "Хранение", "Тренировки сохраняются локально на устройстве") }
                 item { SettingInfoCard("🔒", "Приватность", "Данные тренировок не отправляются в облако") }
             }
+
+            WorkoutRoute.REST_TIMER -> RestTimerScreen(onFinish = { route = WorkoutRoute.EDITOR })
 
             WorkoutRoute.PROGRESS -> {
                 val completed = sessions.filter { it.endedAtMillis != null }
@@ -641,4 +661,39 @@ private fun WorkoutProgressChart(buckets: List<Pair<String, Int>>) {
     }
     if (buckets.all { it.second == 0 }) Text("Пока нет завершённых тренировок за этот период",
         color = colors.textSecondary, style = AppTheme.type.caption)
+}
+
+@Composable
+private fun RestTimerScreen(onFinish: () -> Unit) {
+    val colors = AppTheme.colors
+    var remaining by remember { mutableIntStateOf(60) }
+    var running by remember { mutableStateOf(true) }
+    LaunchedEffect(running, remaining) {
+        if (running && remaining > 0) {
+            delay(1_000)
+            remaining = (remaining - 1).coerceAtLeast(0)
+        } else if (remaining == 0) running = false
+    }
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically),
+    ) {
+        Box(Modifier.size(248.dp).clip(RoundedCornerShape(124.dp)).background(colors.accentSoft),
+            contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(String.format(Locale.US, "%02d:%02d", remaining / 60, remaining % 60),
+                    color = colors.textPrimary, style = AppTheme.type.displayL)
+                Text(if (remaining == 0) "Можно продолжать" else "Осталось",
+                    color = colors.textSecondary, style = AppTheme.type.bodyS)
+            }
+        }
+        Text("Отдых между подходами", color = colors.textPrimary, style = AppTheme.type.h2)
+        Text("Восстанови дыхание и подготовься к следующему подходу",
+            color = colors.textSecondary, style = AppTheme.type.bodyS)
+        PrimaryButton(if (running) "Ⅱ  Пауза" else if (remaining == 0) "↻  Повторить" else "▶  Продолжить",
+            onClick = { if (remaining == 0) remaining = 60; running = !running })
+        TextButton(onClick = { remaining = 60; running = true }) { Text("Сбросить таймер") }
+        TextButton(onClick = onFinish) { Text("Вернуться к тренировке") }
+    }
 }
