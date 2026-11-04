@@ -246,6 +246,12 @@ fun HomeScreen(
         }
     }
 
+    if (showWorkouts) {
+        SlideInOnAppear {
+            WorkoutScreen(onBack = { showWorkouts = false })
+        }
+    }
+
     // §9.1 Лист «Уведомления» — по колоколу на «Сегодня»
     if (showNotifications) {
         NotificationsSheet(onDismiss = { showNotifications = false })
