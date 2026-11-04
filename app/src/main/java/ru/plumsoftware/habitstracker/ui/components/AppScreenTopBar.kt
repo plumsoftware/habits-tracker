@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.plumsoftware.habitstracker.ui.theme.AppTheme
+import ru.plumsoftware.habitstracker.ui.components.clickableNoRipple
 
 /** Единая шапка внутренних экранов приложения. */
 @Composable
