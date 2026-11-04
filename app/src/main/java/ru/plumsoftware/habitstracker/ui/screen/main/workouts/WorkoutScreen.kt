@@ -55,10 +55,9 @@ fun WorkoutScreen(onBack: () -> Unit) {
 
     val active = sessions.firstOrNull { it.endedAtMillis == null }
     val selected = sessions.firstOrNull { it.id == (selectedId ?: active?.id) }
-    val exercises by if (selected != null) repository.exercises(selected.id).collectAsState(initial = emptyList())
-        else remember { mutableStateOf(emptyList()) }
+    val exercises by repository.exercises(selected?.id.orEmpty()).collectAsState(initial = emptyList())
 
-    LaunchedEffect(selected?.id, selected?.notes) { notes = selected?.notes.orEmpty() }
+    LaunchedEffect(selected?.id) { notes = selected?.notes.orEmpty() }
 
     Scaffold { padding ->
         LazyColumn(
