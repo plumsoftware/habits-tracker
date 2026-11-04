@@ -33,6 +33,7 @@ import ru.plumsoftware.habitstracker.ui.theme.AppTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.zip.ZipInputStream
 
 private enum class WorkoutRoute { HOME, EDITOR, HISTORY, TEMPLATES, SETTINGS, PROGRESS, EXERCISE_PICKER, DETAIL, REST_TIMER }
 
@@ -139,7 +140,7 @@ fun WorkoutScreen(onBack: () -> Unit) {
                             .background(colors.accentSoft).padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        WorkoutIllustration(0, Modifier.size(112.dp))
+                        WorkoutIllustration("equipment_dumbbell_large", Modifier.size(112.dp))
                         Text("Тренировка продолжается", color = colors.textPrimary, style = AppTheme.type.h2)
                         Text(active.title, color = colors.textSecondary, style = AppTheme.type.bodyS)
                         Text("Время: ${durationAt(active, clockTick)}", color = colors.textSecondary, style = AppTheme.type.caption)
@@ -151,7 +152,7 @@ fun WorkoutScreen(onBack: () -> Unit) {
                             .background(colors.accentSoft).padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        WorkoutIllustration(0, Modifier.size(124.dp))
+                        WorkoutIllustration("exercise_squat", Modifier.size(124.dp))
                         Text("Готов к тренировке?", color = colors.textPrimary, style = AppTheme.type.h2)
                         Text("Выбери шаблон или собери собственную программу",
                             color = colors.textSecondary, style = AppTheme.type.bodyS)
@@ -505,7 +506,7 @@ private fun TemplateCard(template: WorkoutTemplate, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
         Box(Modifier.size(60.dp).clip(RoundedCornerShape(17.dp)).background(colors.accentSoft),
             contentAlignment = Alignment.Center) {
-            WorkoutIllustration(when { template.title.contains("Кардио") -> 1; template.title.contains("Пресс") -> 3; else -> 0 }, Modifier.fillMaxSize().padding(2.dp))
+            WorkoutIllustration(templateIllustrationAsset(template), Modifier.fillMaxSize().padding(2.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(template.title, color = colors.textPrimary, style = AppTheme.type.bodyL, fontWeight = FontWeight.SemiBold)
@@ -544,7 +545,7 @@ private fun ExerciseCard(
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(colors.surface).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            WorkoutIllustration(exerciseIllustrationIndex(name), Modifier.size(54.dp))
+            WorkoutIllustration(exerciseIllustrationAsset(name), Modifier.size(54.dp))
             Text(name, modifier = Modifier.weight(1f).padding(start = 8.dp), color = colors.textPrimary, style = AppTheme.type.h4)
             if (editable) TextButton(onClick = onDeleteExercise) { Text("Удалить", color = colors.danger) }
         }
@@ -737,32 +738,50 @@ private fun durationAt(session: WorkoutSession, now: Long): String {
     return if (minutes >= 60) "${minutes / 60} ч ${minutes % 60} мин" else "$minutes мин"
 }
 
-private fun exerciseIllustrationIndex(name: String): Int = when {
-    name.contains("присед", true) || name.contains("выпад", true) -> 2
-    name.contains("планк", true) || name.contains("отжим", true) || name.contains("берпи", true) -> 3
-    name.contains("бег", true) || name.contains("прыж", true) -> 1
-    else -> 0
+private fun templateIllustrationAsset(template: WorkoutTemplate): String = when {
+    template.title.contains("Кардио", true) -> "equipment_shoes"
+    template.title.contains("Пресс", true) -> "exercise_crunch"
+    template.title.contains("Растяж", true) -> "exercise_overhead_triceps"
+    template.title.contains("Функцион", true) -> "exercise_dumbbell_row"
+    else -> "exercise_squat"
+}
+
+private fun exerciseIllustrationAsset(name: String): String = when {
+    name.contains("присед", true) -> "exercise_squat"
+    name.contains("выпад", true) -> "exercise_lunge"
+    name.contains("отжим", true) -> "exercise_plank_to_pushup"
+    name.contains("планк", true) -> "exercise_high_plank"
+    name.contains("скручив", true) || name.contains("велосипед", true) -> "exercise_crunch"
+    name.contains("подъём", true) || name.contains("подъем", true) -> "exercise_leg_raise"
+    name.contains("подтяг", true) -> "exercise_dumbbell_row"
+    name.contains("берпи", true) -> "exercise_mountain_climber"
+    name.contains("бег", true) -> "exercise_high_knees"
+    name.contains("прыж", true) -> "exercise_jump_squat"
+    name.contains("жим", true) -> "exercise_overhead_press"
+    name.contains("тяга", true) -> "exercise_dumbbell_row"
+    name.contains("развед", true) -> "exercise_lateral_raise"
+    name.contains("мост", true) -> "exercise_glute_bridge"
+    name.contains("растяж", true) || name.contains("наклон", true) -> "exercise_overhead_triceps"
+    else -> "exercise_squat_hold"
 }
 
 @Composable
-private fun WorkoutIllustration(index: Int, modifier: Modifier = Modifier) {
+private fun WorkoutIllustration(assetName: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val image = remember(context, index) {
+    val image = remember(context, assetName) {
         runCatching {
-            val options = BitmapFactory.Options().apply { inScaled = false }
-            val sheet = BitmapFactory.decodeResource(
-                context.resources,
-                ru.plumsoftware.habitstracker.R.drawable.workout_assets,
-                options,
-            ) ?: return@runCatching null
-
-            val cellSize = 128
-            val x = (index.coerceAtLeast(0) % 2) * cellSize
-            val y = (index.coerceAtLeast(0) / 2) * cellSize
-            if (sheet.isRecycled || x + cellSize > sheet.width || y + cellSize > sheet.height) {
-                null
-            } else {
-                Bitmap.createBitmap(sheet, x, y, cellSize, cellSize).asImageBitmap()
+            context.assets.open("workout/workout_images_split.zip").use { archive ->
+                ZipInputStream(archive).use { zip ->
+                    var entry = zip.nextEntry
+                    while (entry != null) {
+                        if (!entry.isDirectory && entry.name == "$assetName.png") {
+                            return@use BitmapFactory.decodeStream(zip)?.asImageBitmap()
+                        }
+                        zip.closeEntry()
+                        entry = zip.nextEntry
+                    }
+                    null
+                }
             }
         }.getOrNull()
     }
@@ -770,25 +789,12 @@ private fun WorkoutIllustration(index: Int, modifier: Modifier = Modifier) {
     if (image != null) {
         Image(
             bitmap = image,
-            contentDescription = null,
+            contentDescription = assetName.replace('_', ' '),
             modifier = modifier,
             contentScale = ContentScale.Fit,
         )
     } else {
-        // A missing or unreadable atlas must never crash the workout screen.
-        Box(
-            modifier = modifier,
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = when (index) {
-                    1 -> "👟"
-                    2 -> "🏋️"
-                    3 -> "💪"
-                    else -> "🏃"
-                },
-                style = AppTheme.type.h2,
-            )
-        }
+        // The screen remains safe if the optional split-image archive has not been added yet.
+        Box(modifier = modifier)
     }
 }
