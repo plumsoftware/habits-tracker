@@ -139,7 +139,7 @@ fun WorkoutScreen(onBack: () -> Unit) {
                             .background(colors.accentSoft).padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Text("🏋️", fontSize = 44.sp)
+                        WorkoutIllustration(0, Modifier.size(112.dp))
                         Text("Тренировка продолжается", color = colors.textPrimary, style = AppTheme.type.h2)
                         Text(active.title, color = colors.textSecondary, style = AppTheme.type.bodyS)
                         Text("Время: ${durationAt(active, clockTick)}", color = colors.textSecondary, style = AppTheme.type.caption)
@@ -151,7 +151,7 @@ fun WorkoutScreen(onBack: () -> Unit) {
                             .background(colors.accentSoft).padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Text("🏋️", fontSize = 48.sp)
+                        WorkoutIllustration(0, Modifier.size(124.dp))
                         Text("Готов к тренировке?", color = colors.textPrimary, style = AppTheme.type.h2)
                         Text("Выбери шаблон или собери собственную программу",
                             color = colors.textSecondary, style = AppTheme.type.bodyS)
