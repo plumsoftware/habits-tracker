@@ -84,9 +84,12 @@ fun OnboardingScreen(onFinish: () -> Unit) {
         OnboardPage("📊", { colors.tileGreen }, "↑ 12%", "🏆 30 дней",
             "Стрики и честная аналитика",
             "Видно сильные дни, пропуски и связи между привычками. Без лишних цифр."),
-        OnboardPage("🔔", { colors.tileLilac }, "Напоминания", "Точно в 08:00",
-            "Разрешите напоминания",
-            "Нужно, чтобы уведомления приходили вовремя. Можно изменить в настройках."),
+        OnboardPage("🏋️", { colors.tileBlue }, "3 подхода", "45 минут",
+            "Тренировки под контролем",
+            "Создавайте тренировки, добавляйте упражнения и записывайте вес, повторения и прогресс."),
+        OnboardPage("🔔", { colors.tileLilac }, "Напоминания", "В нужное время",
+            "Настройте разрешения",
+            "Разрешите уведомления и фоновую работу, чтобы напоминания приходили вовремя."),
     )
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
@@ -140,7 +143,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                 .weight(1f)
                 .fillMaxWidth(),
         ) { pageIndex ->
-            OnboardPageContent(pages[pageIndex], pageIndex == 3)
+            OnboardPageContent(pages[pageIndex], pageIndex == pages.lastIndex)
         }
 
         PrimaryButton(
