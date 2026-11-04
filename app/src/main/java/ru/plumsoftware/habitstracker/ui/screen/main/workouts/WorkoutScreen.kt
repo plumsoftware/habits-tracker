@@ -747,11 +747,48 @@ private fun exerciseIllustrationIndex(name: String): Int = when {
 @Composable
 private fun WorkoutIllustration(index: Int, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val image = remember(index) {
-        val sheet = BitmapFactory.decodeResource(context.resources, ru.plumsoftware.habitstracker.R.drawable.workout_assets)
-        val x = (index % 2) * 128
-        val y = (index / 2) * 128
-        Bitmap.createBitmap(sheet, x, y, 128, 128).asImageBitmap()
+    val image = remember(context, index) {
+        runCatching {
+            val options = BitmapFactory.Options().apply { inScaled = false }
+            val sheet = BitmapFactory.decodeResource(
+                context.resources,
+                ru.plumsoftware.habitstracker.R.drawable.workout_assets,
+                options,
+            ) ?: return@runCatching null
+
+            val cellSize = 128
+            val x = (index.coerceAtLeast(0) % 2) * cellSize
+            val y = (index.coerceAtLeast(0) / 2) * cellSize
+            if (sheet.isRecycled || x + cellSize > sheet.width || y + cellSize > sheet.height) {
+                null
+            } else {
+                Bitmap.createBitmap(sheet, x, y, cellSize, cellSize).asImageBitmap()
+            }
+        }.getOrNull()
     }
-    Image(bitmap = image, contentDescription = null, modifier = modifier, contentScale = ContentScale.Fit)
+
+    if (image != null) {
+        Image(
+            bitmap = image,
+            contentDescription = null,
+            modifier = modifier,
+            contentScale = ContentScale.Fit,
+        )
+    } else {
+        // A missing or unreadable atlas must never crash the workout screen.
+        Box(
+            modifier = modifier,
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = when (index) {
+                    1 -> "👟"
+                    2 -> "🏋️"
+                    3 -> "💪"
+                    else -> "🏃"
+                },
+                style = AppTheme.type.h2,
+            )
+        }
+    }
 }
