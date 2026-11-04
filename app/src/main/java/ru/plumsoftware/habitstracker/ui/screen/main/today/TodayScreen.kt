@@ -78,6 +78,7 @@ fun TodayScreen(
     onOpenTemplates: () -> Unit,
     hasUnread: Boolean = false,
     onOpenStepCounter: () -> Unit = {},
+    onOpenWorkouts: () -> Unit = {},
 ) {
     val colors = AppTheme.colors
     val spacing = AppTheme.spacing
@@ -107,6 +108,7 @@ fun TodayScreen(
     ) {
         item { Header(onOpenNotifications = onOpenNotifications, hasUnread = hasUnread) }
         item { StepCounterEntry(onClick = onOpenStepCounter) }
+        item { WorkoutEntry(onClick = onOpenWorkouts) }
 
         if (habits.isEmpty()) {
             item { WeekStrip(state = state, onSelectDate = onSelectDate) }
@@ -903,6 +905,31 @@ private fun StepCounterEntry(onClick: () -> Unit) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text("Шагомер", color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
             Text("Автоматический подсчёт активности", color = colors.textSecondary, fontSize = 12.sp)
+        }
+        Text("Открыть  ›", color = colors.accent, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+    }
+}
+
+
+@Composable
+private fun WorkoutEntry(onClick: () -> Unit) {
+    val colors = AppTheme.colors
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(colors.surface)
+            .clickableNoRipple(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(
+            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(colors.accentSoft),
+            contentAlignment = Alignment.Center
+        ) { Text("🏋️", fontSize = 24.sp) }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text("Тренировки", color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Text("Упражнения, подходы и рабочие веса", color = colors.textSecondary, fontSize = 12.sp)
         }
         Text("Открыть  ›", color = colors.accent, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
     }
