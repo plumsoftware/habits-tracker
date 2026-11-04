@@ -35,6 +35,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -44,6 +48,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -285,11 +292,20 @@ private data class PermissionCard(
 private fun PermissionsBlock() {
     val colors = AppTheme.colors
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var resumeCount by remember { mutableIntStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) resumeCount++ }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val notificationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
         androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
     val power = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
     val batteryGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || power.isIgnoringBatteryOptimizations(context.packageName)
+    val backgroundGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.P || !(context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).isBackgroundRestricted
+    @Suppress("UNUSED_VARIABLE") val permissionRefresh = resumeCount
     val cards = listOf(
         PermissionCard(HabitIcons.bell, { colors.accent }, { colors.accentSoft }, "Уведомления", "Напоминания о привычках"),
         PermissionCard(HabitIcons.navSettings, { colors.success }, { colors.successSoft }, "Фоновая работа", "Настройки фоновой активности"),
@@ -297,7 +313,7 @@ private fun PermissionsBlock() {
     )
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
         cards.forEachIndexed { index, card ->
-            val granted = when (index) { 0 -> notificationGranted; 1 -> false; else -> batteryGranted }
+            val granted = when (index) { 0 -> notificationGranted; 1 -> backgroundGranted; else -> batteryGranted }
             Row(Modifier.fillMaxWidth().softShadow(AppTheme.elevation.card, AppTheme.shapes.cardS)
                 .clip(AppTheme.shapes.cardS).background(colors.surface).padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
