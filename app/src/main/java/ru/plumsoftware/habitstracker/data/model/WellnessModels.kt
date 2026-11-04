@@ -1,6 +1,8 @@
 package ru.plumsoftware.habitstracker.data.model
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /** Итог шагомера за локальный календарный день. */
@@ -11,7 +13,7 @@ data class DailySteps(
     val updatedAtMillis: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "workout_sessions")
+@Entity(tableName = "workout_sessions", indices = [Index(value = ["startedAtMillis"])])
 data class WorkoutSession(
     @PrimaryKey val id: String,
     val title: String,
@@ -21,7 +23,11 @@ data class WorkoutSession(
     val createdAtMillis: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "workout_exercises", indices = [Index("sessionId")], foreignKeys = [ForeignKey(entity = WorkoutSession::class, parentColumns = ["id"], childColumns = ["sessionId"], onDelete = ForeignKey.CASCADE)])
+@Entity(
+    tableName = "workout_exercises",
+    indices = [Index(value = ["sessionId"])],
+    foreignKeys = [ForeignKey(entity = WorkoutSession::class, parentColumns = ["id"], childColumns = ["sessionId"], onDelete = ForeignKey.CASCADE)]
+)
 data class WorkoutExercise(
     @PrimaryKey val id: String,
     val sessionId: String,
@@ -29,7 +35,11 @@ data class WorkoutExercise(
     val sortOrder: Int
 )
 
-@Entity(tableName = "workout_sets", indices = [Index("exerciseId")], foreignKeys = [ForeignKey(entity = WorkoutExercise::class, parentColumns = ["id"], childColumns = ["exerciseId"], onDelete = ForeignKey.CASCADE)])
+@Entity(
+    tableName = "workout_sets",
+    indices = [Index(value = ["exerciseId"])],
+    foreignKeys = [ForeignKey(entity = WorkoutExercise::class, parentColumns = ["id"], childColumns = ["exerciseId"], onDelete = ForeignKey.CASCADE)]
+)
 data class WorkoutSet(
     @PrimaryKey val id: String,
     val exerciseId: String,
