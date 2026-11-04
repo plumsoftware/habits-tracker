@@ -16,7 +16,7 @@ import ru.plumsoftware.habitstracker.data.model.dao.*
         Habit::class, HabitCompletion::class, Notification::class, Category::class,
         DailySteps::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
