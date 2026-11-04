@@ -33,6 +33,7 @@ import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.ui.components.HabitNavBar
 import ru.plumsoftware.habitstracker.ui.screen.main.today.TodayScreen
 import ru.plumsoftware.habitstracker.ui.screen.main.steps.StepCounterScreen
+import ru.plumsoftware.habitstracker.ui.screen.main.workouts.WorkoutScreen
 import ru.plumsoftware.habitstracker.ui.screen.main.calendar.CalendarScreen
 import ru.plumsoftware.habitstracker.ui.screen.main.analytics.AnalyticsScreen
 import ru.plumsoftware.habitstracker.ui.screen.templates.TemplatesScreen
@@ -64,6 +65,7 @@ fun HomeScreen(
     var detailHabit by remember { mutableStateOf<ru.plumsoftware.habitstracker.data.model.Habit?>(null) }
     var showNotifications by remember { mutableStateOf(false) }
     var showStepCounter by remember { mutableStateOf(false) }
+    var showWorkouts by remember { mutableStateOf(false) }
     val notificationsViewModel: ru.plumsoftware.habitstracker.ui.screen.main.notifications.NotificationsViewModel = koinViewModel()
     val notificationsState by notificationsViewModel.state.collectAsState()
 
@@ -182,6 +184,7 @@ fun HomeScreen(
                     onOpenTemplates = { showTemplates = true },
                     hasUnread = notificationsState.unreadCount > 0,
                     onOpenStepCounter = { showStepCounter = true },
+                    onOpenWorkouts = { showWorkouts = true },
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(top = innerPadding.calculateTopPadding())
