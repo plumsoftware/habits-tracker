@@ -14,8 +14,7 @@ import ru.plumsoftware.habitstracker.data.model.dao.*
 @Database(
     entities = [
         Habit::class, HabitCompletion::class, Notification::class, Category::class,
-        DailySteps::class, WaterEntry::class, WorkoutSession::class, WorkoutSet::class,
-        SleepSession::class, BodyMeasurement::class, MoodEntry::class
+        DailySteps::class
     ],
     version = 8,
     exportSchema = false
@@ -71,18 +70,6 @@ abstract class HabitDatabase : RoomDatabase() {
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE TABLE IF NOT EXISTS daily_steps (dayStartMillis INTEGER NOT NULL PRIMARY KEY, steps INTEGER NOT NULL, updatedAtMillis INTEGER NOT NULL)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS water_entries (id TEXT NOT NULL PRIMARY KEY, amountMl INTEGER NOT NULL, consumedAtMillis INTEGER NOT NULL)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_water_entries_consumedAtMillis ON water_entries(consumedAtMillis)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS workout_sessions (id TEXT NOT NULL PRIMARY KEY, startedAtMillis INTEGER NOT NULL, endedAtMillis INTEGER, note TEXT NOT NULL)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_sessions_startedAtMillis ON workout_sessions(startedAtMillis)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS workout_sets (id TEXT NOT NULL PRIMARY KEY, workoutId TEXT NOT NULL, exerciseName TEXT NOT NULL, setNumber INTEGER NOT NULL, repetitions INTEGER NOT NULL, weightKg REAL NOT NULL, FOREIGN KEY(workoutId) REFERENCES workout_sessions(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_sets_workoutId ON workout_sets(workoutId)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS sleep_sessions (id TEXT NOT NULL PRIMARY KEY, startedAtMillis INTEGER NOT NULL, endedAtMillis INTEGER NOT NULL, quality INTEGER, note TEXT NOT NULL)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_sleep_sessions_startedAtMillis ON sleep_sessions(startedAtMillis)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS body_measurements (id TEXT NOT NULL PRIMARY KEY, measuredAtMillis INTEGER NOT NULL, weightKg REAL, bodyFatPercent REAL, waistCm REAL, chestCm REAL, hipsCm REAL, note TEXT NOT NULL)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_body_measurements_measuredAtMillis ON body_measurements(measuredAtMillis)")
-                db.execSQL("CREATE TABLE IF NOT EXISTS mood_entries (id TEXT NOT NULL PRIMARY KEY, recordedAtMillis INTEGER NOT NULL, mood INTEGER NOT NULL, note TEXT NOT NULL)")
-                db.execSQL("CREATE INDEX IF NOT EXISTS index_mood_entries_recordedAtMillis ON mood_entries(recordedAtMillis)")
             }
         }
 
