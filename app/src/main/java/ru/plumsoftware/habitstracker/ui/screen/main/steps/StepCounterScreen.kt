@@ -33,9 +33,11 @@ fun StepCounterScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
     var steps by remember { mutableIntStateOf(0) }
     var sensorAvailable by remember { mutableStateOf(false) }
     var permissionGranted by remember { mutableStateOf(StepCounterManager.hasPermission(context)) }
+    var trackingEnabled by remember { mutableStateOf(StepCounterManager.isEnabled(context)) }
     val colors = AppTheme.colors
 
     LaunchedEffect(Unit) {
+        trackingEnabled = StepCounterManager.isEnabled(context)
         sensorAvailable = (context.getSystemService(Context.SENSOR_SERVICE) as SensorManager)
             .getDefaultSensor(Sensor.TYPE_STEP_COUNTER) != null
         repository.stepsForDay().collect { steps = it?.steps ?: 0 }
@@ -45,7 +47,7 @@ fun StepCounterScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         permissionGranted = granted
-        if (granted) StepCounterManager.start(context)
+        if (granted) { StepCounterManager.start(context); trackingEnabled = true }
     }
 
     Column(
@@ -91,11 +93,14 @@ fun StepCounterScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     Button(onClick = {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                             permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
-                        else StepCounterManager.start(context)
+                        else { StepCounterManager.start(context); trackingEnabled = true }
                     }, modifier = Modifier.fillMaxWidth()) { Text("Разрешить и включить") }
                 } else {
-                    Button(onClick = { StepCounterManager.start(context) }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Включить шагомер")
+                    Button(onClick = {
+                        if (trackingEnabled) StepCounterManager.stop(context) else StepCounterManager.start(context)
+                        trackingEnabled = !trackingEnabled
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (trackingEnabled) "Остановить шагомер" else "Включить шагомер")
                     }
                 }
             }
