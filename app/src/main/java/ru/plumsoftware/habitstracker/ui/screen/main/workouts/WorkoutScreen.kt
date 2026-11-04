@@ -69,11 +69,11 @@ fun WorkoutScreen(onBack: () -> Unit) {
     var showDeleteWorkoutDialog by remember { mutableStateOf(false) }
     var showRenameWorkoutDialog by remember { mutableStateOf(false) }
     var renameValue by remember { mutableStateOf("") }
-    var clockTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(active?.id) { while (active != null) { delay(1_000); clockTick = System.currentTimeMillis() } }
+    var clockTick by remember { mutableStateOf(System.currentTimeMillis()) }
     var filter by remember { mutableStateOf("Все") }
 
     val active = sessions.firstOrNull { it.endedAtMillis == null }
+    LaunchedEffect(active?.id) { while (active != null) { delay(1_000); clockTick = System.currentTimeMillis() } }
     val selected = sessions.firstOrNull { it.id == selectedId }
     val editorSession = selected ?: active
     val exercises by repository.exercises(editorSession?.id.orEmpty()).collectAsState(initial = emptyList())
