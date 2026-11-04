@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.koinInject
 import ru.plumsoftware.habitstracker.data.database.WellnessRepository
 import ru.plumsoftware.habitstracker.data.service.StepCounterManager
+import ru.plumsoftware.habitstracker.ui.components.AppScreenTopBar
 import ru.plumsoftware.habitstracker.ui.theme.AppTheme
 import java.text.NumberFormat
 import java.util.Locale
@@ -55,12 +56,7 @@ fun StepCounterScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("‹ Назад") }
-            Spacer(Modifier.width(8.dp))
-            Text("Шагомер", style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold, color = colors.textPrimary)
-        }
+        AppScreenTopBar(title = "Шагомер", onBack = onBack)
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp),
             colors = CardDefaults.cardColors(containerColor = colors.surface)) {
             Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
