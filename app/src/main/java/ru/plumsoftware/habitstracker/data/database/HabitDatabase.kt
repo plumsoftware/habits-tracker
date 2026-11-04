@@ -14,7 +14,7 @@ import ru.plumsoftware.habitstracker.data.model.dao.*
 @Database(
     entities = [
         Habit::class, HabitCompletion::class, Notification::class, Category::class,
-        DailySteps::class
+        DailySteps::class, WorkoutSession::class, WorkoutExercise::class, WorkoutSet::class
     ],
     version = 9,
     exportSchema = false
