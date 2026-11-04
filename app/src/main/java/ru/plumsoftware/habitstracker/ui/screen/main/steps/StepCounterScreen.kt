@@ -19,7 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import org.koin.androidx.compose.koinInject
+import org.koin.compose.koinInject
 import ru.plumsoftware.habitstracker.data.database.WellnessRepository
 import ru.plumsoftware.habitstracker.data.service.StepCounterManager
 import ru.plumsoftware.habitstracker.ui.theme.AppTheme
