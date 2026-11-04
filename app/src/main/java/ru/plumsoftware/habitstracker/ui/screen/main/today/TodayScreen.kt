@@ -888,7 +888,7 @@ private fun StepCounterEntry(onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(colors.card)
+            .background(colors.surface)
             .clickableNoRipple(onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
