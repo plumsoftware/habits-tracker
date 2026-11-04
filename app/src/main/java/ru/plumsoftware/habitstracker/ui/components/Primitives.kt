@@ -199,3 +199,35 @@ fun PillChip(
         Text(text = text, style = AppTheme.type.label, color = contentColor)
     }
 }
+
+
+/** Единая шапка полноэкранных разделов приложения. */
+@Composable
+fun AppTopBar(
+    title: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailing: (@Composable RowScope.() -> Unit)? = null,
+) {
+    val colors = AppTheme.colors
+    Row(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(18.dp))
+                .background(colors.surface).clickableNoRipple(onClick = onBack),
+            contentAlignment = Alignment.Center,
+        ) {
+            AppIcon(HabitIcons.chevronLeft, tint = colors.textPrimary, size = 25.dp)
+        }
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f),
+            style = AppTheme.type.displayS,
+            color = colors.textPrimary,
+        )
+        if (trailing != null) Row(content = trailing)
+    }
+}
