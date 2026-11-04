@@ -15,6 +15,7 @@ import ru.plumsoftware.habitstracker.data.database.*
 import ru.plumsoftware.habitstracker.data.export.ExportManager
 import ru.plumsoftware.habitstracker.data.settings.SettingsRepository
 import ru.plumsoftware.habitstracker.data.settings.ThemeRepository
+import ru.plumsoftware.habitstracker.data.service.StepCounterManager
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeViewModel
 import ru.plumsoftware.habitstracker.ui.screen.main.notifications.NotificationsViewModel
 import ru.plumsoftware.habitstracker.ui.screen.main.settings.SettingsViewModel
@@ -49,6 +50,9 @@ class MyApplication : Application() {
                 ExportManager.exportModule,
                 wellnessModule
             ))
+        }
+        if (StepCounterManager.isEnabled(this) && StepCounterManager.hasPermission(this)) {
+            runCatching { StepCounterManager.start(this) }
         }
         runCatching {
             org.koin.core.context.GlobalContext.get()
