@@ -60,7 +60,7 @@ fun StepCounterScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 fontWeight = FontWeight.Bold, color = colors.textPrimary)
         }
         Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = colors.card)) {
+            colors = CardDefaults.cardColors(containerColor = colors.surface)) {
             Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("СЕГОДНЯ", style = MaterialTheme.typography.labelLarge, color = colors.textSecondary)
                 Spacer(Modifier.height(12.dp))
@@ -77,7 +77,7 @@ fun StepCounterScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 Text("${(steps * 100 / 10_000).coerceAtMost(100)}% от цели 10 000 шагов", color = colors.textSecondary)
             }
         }
-        Card(colors = CardDefaults.cardColors(containerColor = colors.card), shape = RoundedCornerShape(22.dp)) {
+        Card(colors = CardDefaults.cardColors(containerColor = colors.surface), shape = RoundedCornerShape(22.dp)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(when {
                     !sensorAvailable -> "На этом устройстве не найден датчик шагов"
