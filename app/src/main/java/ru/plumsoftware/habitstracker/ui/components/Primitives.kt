@@ -211,21 +211,24 @@ fun AppTopBar(
 ) {
     val colors = AppTheme.colors
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = AppTheme.spacing.screenH, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(
-            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(18.dp))
-                .background(colors.surface).clickableNoRipple(onClick = onBack),
+            modifier = Modifier.size(40.dp)
+                .softShadow(AppTheme.elevation.subtle, RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(14.dp))
+                .background(colors.surface)
+                .clickableNoRipple(onClick = onBack),
             contentAlignment = Alignment.Center,
         ) {
-            AppIcon(HabitIcons.chevronLeft, tint = colors.textPrimary, size = 25.dp)
+            AppIcon(HabitIcons.chevronLeft, tint = colors.textPrimary, size = 24.dp)
         }
         Text(
             text = title,
             modifier = Modifier.weight(1f),
-            style = AppTheme.type.displayS,
+            style = AppTheme.type.h2,
             color = colors.textPrimary,
         )
         if (trailing != null) Row(content = trailing)
