@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -58,7 +59,11 @@ fun TabletShell(
     onOpenNotifications: () -> Unit,
     onOpenTemplates: () -> Unit,
     onUnarchive: (String) -> Unit,
+    onOpenStepCounter: () -> Unit = {},
+    onOpenWorkouts: () -> Unit = {},
+    onOpenSleep: () -> Unit = {},
 ) {
+    val tabStates = rememberSaveableStateHolder()
     val colors = AppTheme.colors
     Row(
         modifier = Modifier
@@ -69,8 +74,12 @@ fun TabletShell(
         NavRail(current = state.mainScreenState, onNav = onNav, onAdd = onAdd)
 
         Box(Modifier.weight(1f).fillMaxHeight()) {
+            tabStates.SaveableStateProvider(state.mainScreenState.toString()) {
             when (state.mainScreenState) {
                 MainScreenStates.Calendar -> CalendarScreenTablet(
+                    onOpenStepCounter = onOpenStepCounter,
+                    onOpenWorkouts = onOpenWorkouts,
+                    onOpenSleep = onOpenSleep,
                     state = state, onSelectDate = onSelectDate, onHabitClick = onHabitClick,
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -94,8 +103,12 @@ fun TabletShell(
                     onOpenNotifications = onOpenNotifications,
                     onOpenTemplates = onOpenTemplates,
                     hasUnread = hasUnread,
+                    onOpenStepCounter = onOpenStepCounter,
+                    onOpenWorkouts = onOpenWorkouts,
+                    onOpenSleep = onOpenSleep,
                     modifier = Modifier.fillMaxSize(),
                 )
+            }
             }
         }
     }
@@ -135,8 +148,8 @@ private fun NavRail(current: MainScreenStates, onNav: (MainScreenStates) -> Unit
         Box(
             modifier = Modifier
                 .size(56.dp)
-                .softShadow(AppTheme.elevation.fab, AppTheme.shapes.fab)
-                .clip(AppTheme.shapes.fab)
+                .softShadow(AppTheme.elevation.fab, androidx.compose.foundation.shape.CircleShape)
+                .clip(androidx.compose.foundation.shape.CircleShape)
                 .background(colors.accent)
                 .clickableNoRipple(onClick = onAdd),
             contentAlignment = Alignment.Center,

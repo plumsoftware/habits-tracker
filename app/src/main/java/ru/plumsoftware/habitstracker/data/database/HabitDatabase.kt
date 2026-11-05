@@ -8,19 +8,15 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.module
-import ru.plumsoftware.habitstracker.data.model.Category
-import ru.plumsoftware.habitstracker.data.model.Converters
-import ru.plumsoftware.habitstracker.data.model.Habit
-import ru.plumsoftware.habitstracker.data.model.HabitCompletion
-import ru.plumsoftware.habitstracker.data.model.Notification
-import ru.plumsoftware.habitstracker.data.model.dao.CategoryDao
-import ru.plumsoftware.habitstracker.data.model.dao.HabitCompletionDao
-import ru.plumsoftware.habitstracker.data.model.dao.HabitDao
-import ru.plumsoftware.habitstracker.data.model.dao.NotificationsDao
+import ru.plumsoftware.habitstracker.data.model.*
+import ru.plumsoftware.habitstracker.data.model.dao.*
 
 @Database(
-    entities = [Habit::class, HabitCompletion::class, Notification::class, Category::class],
-    version = 7,
+    entities = [
+        Habit::class, HabitCompletion::class, Notification::class, Category::class,
+        DailySteps::class, WorkoutSession::class, WorkoutExercise::class, WorkoutSet::class, SleepRecord::class
+    ],
+    version = 12,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -29,42 +25,23 @@ abstract class HabitDatabase : RoomDatabase() {
     abstract fun habitCompletionDao(): HabitCompletionDao
     abstract fun notificationsDao(): NotificationsDao
     abstract fun categoryDao(): CategoryDao
+    abstract fun wellnessDao(): WellnessDao
 
     companion object {
-        // Добавляет колонки type/isRead в таблицу notifications без потери привычек
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "ALTER TABLE notifications ADD COLUMN type TEXT NOT NULL DEFAULT 'GENERAL'"
-                )
-                db.execSQL(
-                    "ALTER TABLE notifications ADD COLUMN isRead INTEGER NOT NULL DEFAULT 0"
-                )
+                db.execSQL("ALTER TABLE notifications ADD COLUMN type TEXT NOT NULL DEFAULT 'GENERAL'")
+                db.execSQL("ALTER TABLE notifications ADD COLUMN isRead INTEGER NOT NULL DEFAULT 0")
             }
         }
-
-        // Добавляет категории и колонку categoryId в привычки, создаёт встроенные категории
         val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS categories (
-                        id TEXT NOT NULL PRIMARY KEY,
-                        name TEXT NOT NULL,
-                        colorArgb INTEGER NOT NULL,
-                        isBuiltIn INTEGER NOT NULL DEFAULT 0,
-                        sortOrder INTEGER NOT NULL DEFAULT 0
-                    )
-                    """.trimIndent()
-                )
+                db.execSQL("""CREATE TABLE IF NOT EXISTS categories (
+                    id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, colorArgb INTEGER NOT NULL,
+                    isBuiltIn INTEGER NOT NULL DEFAULT 0, sortOrder INTEGER NOT NULL DEFAULT 0)""")
                 db.execSQL("ALTER TABLE habits ADD COLUMN categoryId TEXT")
-
-                // Предзаполняем встроенные категории (их нельзя удалять/менять)
                 fun insertBuiltIn(id: String, name: String, color: Long, order: Int) {
-                    db.execSQL(
-                        "INSERT OR IGNORE INTO categories (id, name, colorArgb, isBuiltIn, sortOrder) VALUES (?, ?, ?, 1, ?)",
-                        arrayOf<Any>(id, name, color, order)
-                    )
+                    db.execSQL("INSERT OR IGNORE INTO categories (id,name,colorArgb,isBuiltIn,sortOrder) VALUES (?,?,?,1,?)", arrayOf<Any>(id,name,color,order))
                 }
                 insertBuiltIn(Category.ID_HEALTH, "Здоровье", Category.COLOR_HEALTH, 0)
                 insertBuiltIn(Category.ID_WORK, "Работа", Category.COLOR_WORK, 1)
@@ -72,15 +49,9 @@ abstract class HabitDatabase : RoomDatabase() {
                 insertBuiltIn(Category.ID_PERSONAL, "Личное", Category.COLOR_PERSONAL, 3)
             }
         }
-
-        // Добавляет колонку emoji в привычки (ТЗ §2). Старые записи получают «🎯».
         val MIGRATION_3_4 = object : Migration(3, 4) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE habits ADD COLUMN emoji TEXT NOT NULL DEFAULT '🎯'")
-            }
+            override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE habits ADD COLUMN emoji TEXT NOT NULL DEFAULT '🎯'") }
         }
-
-        // Добавляет расписание по дням, связывание и заморозку (ТЗ §7.3/§7.4).
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE habits ADD COLUMN weekdays TEXT NOT NULL DEFAULT ''")
@@ -88,28 +59,75 @@ abstract class HabitDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE habits ADD COLUMN freezeEnabled INTEGER NOT NULL DEFAULT 0")
             }
         }
-
-        // Добавляет флаг архива привычки (ТЗ §11.3).
         val MIGRATION_5_6 = object : Migration(5, 6) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE habits ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
-            }
+            override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE habits ADD COLUMN archived INTEGER NOT NULL DEFAULT 0") }
         }
-
-        // Добавляет время отметки (для достижений «утро/вечер», ТЗ §10.6).
         val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE habit_completions ADD COLUMN completedAtMillis INTEGER NOT NULL DEFAULT 0") }
+        }
+
+        /** Создаёт новые таблицы, не затрагивая существующие привычки и отметки. */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE habit_completions ADD COLUMN completedAtMillis INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("CREATE TABLE IF NOT EXISTS daily_steps (dayStartMillis INTEGER NOT NULL PRIMARY KEY, steps INTEGER NOT NULL, updatedAtMillis INTEGER NOT NULL)")
             }
         }
 
-        // Для чистой установки (version 3 сразу) заполняем встроенные категории после создания БД
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS workout_sessions (id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, startedAtMillis INTEGER NOT NULL, endedAtMillis INTEGER, notes TEXT NOT NULL, createdAtMillis INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_sessions_startedAtMillis ON workout_sessions(startedAtMillis)")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS workout_exercises (
+                    id TEXT NOT NULL PRIMARY KEY, sessionId TEXT NOT NULL, name TEXT NOT NULL, sortOrder INTEGER NOT NULL,
+                    FOREIGN KEY(sessionId) REFERENCES workout_sessions(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_exercises_sessionId ON workout_exercises(sessionId)")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS workout_sets (
+                    id TEXT NOT NULL PRIMARY KEY, exerciseId TEXT NOT NULL, setNumber INTEGER NOT NULL,
+                    reps INTEGER NOT NULL, weightKg REAL NOT NULL, completed INTEGER NOT NULL,
+                    FOREIGN KEY(exerciseId) REFERENCES workout_exercises(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_sets_exerciseId ON workout_sets(exerciseId)")
+            }
+        }
+
+        /**
+         * Повторно гарантирует наличие всех таблиц тренировок. Нужна для восстановления
+         * баз, созданных промежуточной версией 9, где была добавлена только workout_sessions.
+         */
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS workout_sessions (id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, startedAtMillis INTEGER NOT NULL, endedAtMillis INTEGER, notes TEXT NOT NULL, createdAtMillis INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_sessions_startedAtMillis ON workout_sessions(startedAtMillis)")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS workout_exercises (
+                    id TEXT NOT NULL PRIMARY KEY, sessionId TEXT NOT NULL, name TEXT NOT NULL, sortOrder INTEGER NOT NULL,
+                    FOREIGN KEY(sessionId) REFERENCES workout_sessions(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_exercises_sessionId ON workout_exercises(sessionId)")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS workout_sets (
+                    id TEXT NOT NULL PRIMARY KEY, exerciseId TEXT NOT NULL, setNumber INTEGER NOT NULL,
+                    reps INTEGER NOT NULL, weightKg REAL NOT NULL, completed INTEGER NOT NULL,
+                    FOREIGN KEY(exerciseId) REFERENCES workout_exercises(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )""")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_workout_sets_exerciseId ON workout_sets(exerciseId)")
+            }
+        }
+
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS sleep_records (dayStartMillis INTEGER NOT NULL PRIMARY KEY, startedAtMillis INTEGER NOT NULL, endedAtMillis INTEGER NOT NULL)")
+            }
+        }
+
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE habits ADD COLUMN activityLink TEXT")
+            }
+        }
+
         private fun seedBuiltInCategories(db: SupportSQLiteDatabase) {
             fun insertBuiltIn(id: String, name: String, color: Long, order: Int) {
-                db.execSQL(
-                    "INSERT OR IGNORE INTO categories (id, name, colorArgb, isBuiltIn, sortOrder) VALUES (?, ?, ?, 1, ?)",
-                    arrayOf<Any>(id, name, color, order)
-                )
+                db.execSQL("INSERT OR IGNORE INTO categories (id,name,colorArgb,isBuiltIn,sortOrder) VALUES (?,?,?,1,?)", arrayOf<Any>(id,name,color,order))
             }
             insertBuiltIn(Category.ID_HEALTH, "Здоровье", Category.COLOR_HEALTH, 0)
             insertBuiltIn(Category.ID_WORK, "Работа", Category.COLOR_WORK, 1)
@@ -119,37 +137,20 @@ abstract class HabitDatabase : RoomDatabase() {
 
         val databaseModule = module {
             single<HabitDatabase> {
-                Room.databaseBuilder(
-                    androidContext(),
-                    HabitDatabase::class.java,
-                    "habit_database"
-                )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                Room.databaseBuilder(androidContext(), HabitDatabase::class.java, "habit_database")
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)
-                            // Свежая установка: сразу создаём встроенные категории
                             seedBuiltInCategories(db)
                         }
-                    })
-                    .build()
+                    }).build()
             }
-
-            single<HabitDao> {
-                get<HabitDatabase>().habitDao()
-            }
-
-            single<HabitCompletionDao> {
-                get<HabitDatabase>().habitCompletionDao()
-            }
-
-            single<NotificationsDao> {
-                get<HabitDatabase>().notificationsDao()
-            }
-
-            single<CategoryDao> {
-                get<HabitDatabase>().categoryDao()
-            }
+            single<HabitDao> { get<HabitDatabase>().habitDao() }
+            single<HabitCompletionDao> { get<HabitDatabase>().habitCompletionDao() }
+            single<NotificationsDao> { get<HabitDatabase>().notificationsDao() }
+            single<CategoryDao> { get<HabitDatabase>().categoryDao() }
+            single<WellnessDao> { get<HabitDatabase>().wellnessDao() }
         }
     }
 }

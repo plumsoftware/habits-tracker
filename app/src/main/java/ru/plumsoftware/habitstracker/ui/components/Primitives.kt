@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ripple
 import androidx.compose.material3.Text
@@ -197,5 +198,40 @@ fun PillChip(
     ) {
         leading?.invoke()
         Text(text = text, style = AppTheme.type.label, color = contentColor)
+    }
+}
+
+
+/** Единая шапка полноэкранных разделов приложения. */
+@Composable
+fun AppTopBar(
+    title: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailing: (@Composable RowScope.() -> Unit)? = null,
+) {
+    val colors = AppTheme.colors
+    Row(
+        modifier = modifier.fillMaxWidth().padding(horizontal = AppTheme.spacing.screenH, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(40.dp)
+                .softShadow(AppTheme.elevation.subtle, RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(14.dp))
+                .background(colors.surface)
+                .clickableNoRipple(onClick = onBack),
+            contentAlignment = Alignment.Center,
+        ) {
+            AppIcon(HabitIcons.chevronLeft, tint = colors.textPrimary, size = 24.dp)
+        }
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f),
+            style = AppTheme.type.h2,
+            color = colors.textPrimary,
+        )
+        if (trailing != null) Row(content = trailing)
     }
 }

@@ -16,6 +16,9 @@ object Deeplinks {
     const val ANALYTICS = "habits://analytics"
     const val NEW_HABIT = "habits://habit/new"
     const val TEMPLATES = "habits://templates"
+    const val WORKOUTS = "habits://workouts"
+    const val STEPS = "habits://steps"
+    const val SLEEP = "habits://sleep"
     fun habit(id: String) = "habits://habit/$id"
 
     // Deeplink передаётся как extra Intent'а (Glance 1.1.1 не умеет actionStartActivity(Intent))

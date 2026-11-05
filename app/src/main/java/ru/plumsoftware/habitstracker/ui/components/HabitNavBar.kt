@@ -96,8 +96,8 @@ private fun Fab(onAdd: () -> Unit) {
     Box(
         modifier = Modifier
             .size(58.dp)
-            .softShadow(AppTheme.elevation.fab, AppTheme.shapes.fab)
-            .clip(AppTheme.shapes.fab)
+            .softShadow(AppTheme.elevation.fab, androidx.compose.foundation.shape.CircleShape)
+            .clip(androidx.compose.foundation.shape.CircleShape)
             .background(colors.accent)
             .clickableNoRipple(onClick = onAdd),
         contentAlignment = Alignment.Center,

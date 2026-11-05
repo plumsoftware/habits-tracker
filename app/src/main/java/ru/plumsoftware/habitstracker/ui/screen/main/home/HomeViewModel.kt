@@ -3,6 +3,8 @@ package ru.plumsoftware.habitstracker.ui.screen.main.home
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -32,6 +34,8 @@ class HomeViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(HomeState())
     val state: StateFlow<HomeState> = _state
+    private val _habitCreated = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val habitCreated = _habitCreated.asSharedFlow()
 
     init {
         // Только initDate() → loadHabitsForDate(): один активный сбор Flow.
@@ -308,7 +312,7 @@ class HomeViewModel(
     }
 
     /** Просит систему перерисовать виджеты после изменения данных. */
-    private fun refreshWidgets() {
+    internal fun refreshWidgets() {
         viewModelScope.launch {
             try {
                 val context = org.koin.core.context.GlobalContext.get().get<android.content.Context>()
@@ -553,26 +557,29 @@ class HomeViewModel(
             emoji, title,
             if (overallStreak >= target) "получено" else "ещё ${target - overallStreak}",
             overallStreak >= target,
+            "Поддерживай серию без пропусков: $target дн. подряд",
         )
         fun checksAch(emoji: String, title: String, target: Int) = Achievement(
             emoji, title,
             if (totalChecks >= target) "получено" else "ещё ${target - totalChecks}",
             totalChecks >= target,
+            "Собери $target отметок выполнения привычек",
         )
 
         return listOf(
-            Achievement("🌱", "Первый шаг", if (totalChecks >= 1) "получено" else "отметьте привычку", totalChecks >= 1),
+            Achievement("🌱", "Первый шаг", if (totalChecks >= 1) "получено" else "отметьте привычку", totalChecks >= 1, "Отметь свою первую привычку"),
             streakAch("🔥", "7 дней", 7),
             streakAch("🏆", "30 дней", 30),
             streakAch("💎", "100 дней", 100),
-            Achievement("⚡️", "Идеальная неделя", if (perfectWeek) "получено" else "закройте все за неделю", perfectWeek),
+            Achievement("⚡️", "Идеальная неделя", if (perfectWeek) "получено" else "закройте все за неделю", perfectWeek, "Выполни все запланированные привычки за неделю"),
             Achievement(
                 "🎖", "Успешная неделя",
                 if (successfulWeek) "получено" else "$currentWeekGood/$weeklyGoal дней",
                 successfulWeek,
+                "Выполни все привычки в $weeklyGoal из семи дней недели",
             ),
-            Achievement("🌅", "Ранняя пташка", if (morningChecks >= 30) "получено" else "ещё ${30 - morningChecks} утром", morningChecks >= 30),
-            Achievement("🌙", "Сова", if (eveningChecks >= 30) "получено" else "ещё ${30 - eveningChecks} вечером", eveningChecks >= 30),
+            Achievement("🌅", "Ранняя пташка", if (morningChecks >= 30) "получено" else "ещё ${30 - morningChecks} утром", morningChecks >= 30, "Сделай 30 отметок до полудня"),
+            Achievement("🌙", "Сова", if (eveningChecks >= 30) "получено" else "ещё ${30 - eveningChecks} вечером", eveningChecks >= 30, "Сделай 30 отметок с 18:00"),
             checksAch("✅", "100 отметок", 100),
             checksAch("🎯", "500 отметок", 500),
         )
@@ -757,6 +764,7 @@ class HomeViewModel(
                     creationDate = getStartOfDay(state.value.selectedDate)
                 )
                 repository.insertHabit(habitWithSelectedDate)
+                _habitCreated.tryEmit(Unit)
                 Log.d(
                     "HomeViewModel",
                     "Привычка '${habit.title}' успешно добавлена с датой создания: ${Date(state.value.selectedDate)}"

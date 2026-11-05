@@ -1,37 +1,52 @@
 package ru.plumsoftware.habitstracker.ui.screen.main
 
-import android.app.Activity
-import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.yandex.mobile.ads.appopenad.AppOpenAd
-import com.yandex.mobile.ads.appopenad.AppOpenAdEventListener
-import com.yandex.mobile.ads.appopenad.AppOpenAdLoadListener
-import com.yandex.mobile.ads.appopenad.AppOpenAdLoader
-import com.yandex.mobile.ads.common.AdError
-import com.yandex.mobile.ads.common.AdRequestConfiguration
-import com.yandex.mobile.ads.common.AdRequestError
-import com.yandex.mobile.ads.common.ImpressionData
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
+import ru.plumsoftware.habitstracker.data.database.AppStatsRepository
+import ru.plumsoftware.habitstracker.data.database.WellnessRepository
+import ru.plumsoftware.habitstracker.data.model.HabitActivityLink
+import ru.plumsoftware.habitstracker.data.model.SleepRecord
 import ru.plumsoftware.habitstracker.MyApplication
+import ru.plumsoftware.habitstracker.ui.ads.AdLoadingDialog
+import ru.plumsoftware.habitstracker.ui.ads.AdLoadingState
+import ru.plumsoftware.habitstracker.ui.ads.InterstitialAds
+import ru.plumsoftware.habitstracker.ui.ads.showAppOpenAd
+import ru.plumsoftware.habitstracker.ui.widget.Deeplinks
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.ui.components.HabitNavBar
 import ru.plumsoftware.habitstracker.ui.screen.main.today.TodayScreen
+import ru.plumsoftware.habitstracker.ui.screen.main.sleep.SleepEntryDialog
+import ru.plumsoftware.habitstracker.ui.screen.main.sleep.SleepScreen
+import ru.plumsoftware.habitstracker.ui.screen.main.steps.StepCounterScreen
+import ru.plumsoftware.habitstracker.ui.screen.main.workouts.WorkoutScreen
 import ru.plumsoftware.habitstracker.ui.screen.main.calendar.CalendarScreen
 import ru.plumsoftware.habitstracker.ui.screen.main.analytics.AnalyticsScreen
 import ru.plumsoftware.habitstracker.ui.screen.templates.TemplatesScreen
@@ -56,12 +71,65 @@ fun HomeScreen(
     onDeeplinkHandled: () -> Unit = {},
 ) {
     val viewModel: HomeViewModel = koinViewModel()
+    val tabStates = rememberSaveableStateHolder()
     val state by viewModel.state.collectAsState()
     var showTemplates by remember { mutableStateOf(false) }
     var showForm by remember { mutableStateOf(false) }
     var formHabit by remember { mutableStateOf<ru.plumsoftware.habitstracker.data.model.Habit?>(null) }
     var detailHabit by remember { mutableStateOf<ru.plumsoftware.habitstracker.data.model.Habit?>(null) }
     var showNotifications by remember { mutableStateOf(false) }
+    var showStepCounter by remember { mutableStateOf(false) }
+    var showWorkouts by remember { mutableStateOf(false) }
+    var showSleep by remember { mutableStateOf(false) }
+    val wellness: WellnessRepository = koinInject()
+    val activityScope = rememberCoroutineScope()
+    var sleepPrompt by remember { mutableStateOf<Pair<Long, SleepRecord?>?>(null) }
+    var activityActionPending by remember { mutableStateOf(false) }
+    var activityError by remember { mutableStateOf<String?>(null) }
+
+    fun refreshAfterActivity() {
+        viewModel.refreshWidgets()
+        detailHabit?.let { viewModel.onEvent(HomeEvent.LoadHabitDetail(it.id)) }
+    }
+
+    fun toggleHabit(habitId: String, done: Boolean, day: Long = state.selectedDate) {
+        val link = state.allHabits.firstOrNull { it.id == habitId }?.activityLink
+        if (!done || link == null) {
+            val event = if (done) HomeEvent.MarkHabitCompleted(habitId) else HomeEvent.UnmarkHabitCompleted(habitId)
+            viewModel.onEvent(event)
+            return
+        }
+        if (activityActionPending) return
+        activityActionPending = true
+        val selectedDay = day.takeIf { it > 0L } ?: System.currentTimeMillis()
+        activityScope.launch {
+            try {
+                when (link) {
+                    HabitActivityLink.SLEEP -> sleepPrompt = selectedDay to wellness.sleepForDay(selectedDay).first()
+                    HabitActivityLink.WORKOUT -> {
+                        if (wellness.completeWorkoutHabitsForDay(selectedDay)) {
+                            refreshAfterActivity()
+                        } else {
+                            val startToday = Calendar.getInstance().apply {
+                                set(Calendar.HOUR_OF_DAY, 0)
+                                set(Calendar.MINUTE, 0)
+                                set(Calendar.SECOND, 0)
+                                set(Calendar.MILLISECOND, 0)
+                            }.timeInMillis
+                            if (selectedDay >= startToday) showWorkouts = true
+                            else activityError = "За выбранный день нет завершённой тренировки."
+                        }
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                activityError = "Не удалось загрузить данные активности. Попробуй ещё раз."
+            } finally {
+                activityActionPending = false
+            }
+        }
+    }
     val notificationsViewModel: ru.plumsoftware.habitstracker.ui.screen.main.notifications.NotificationsViewModel = koinViewModel()
     val notificationsState by notificationsViewModel.state.collectAsState()
 
@@ -81,12 +149,49 @@ fun HomeScreen(
     }
 
     val activity = LocalActivity.current
-    val context = LocalContext.current
+    val adLoading = remember { AdLoadingState() }
+    val appStats: AppStatsRepository = koinInject()
+
+    val interstitial = MyApplication.platformConfig.adsConfig.interstitial
+    var adTransition by remember { mutableStateOf<Job?>(null) }
+
+    fun navigateWithAd(placementId: String, navigate: () -> Unit) {
+        if (adTransition?.isActive == true) return
+        adTransition = activityScope.launch {
+            if (appStats.hasUsedForHours(24)) {
+                InterstitialAds.showIfAvailable(activity, placementId, adLoading)
+            }
+            navigate()
+        }
+    }
+
+    fun openSleep() {
+        navigateWithAd(interstitial.sleepEntry) { showSleep = true }
+    }
+
+    fun closeStepCounter() {
+        navigateWithAd(interstitial.stepCounterExit) { showStepCounter = false }
+    }
 
     // Deeplink из виджетов (habits://...)
     LaunchedEffect(deeplink, state.allHabits) {
         val link = deeplink ?: return@LaunchedEffect
         when {
+            link == Deeplinks.WORKOUTS || link == Deeplinks.STEPS || link == Deeplinks.SLEEP -> {
+                showTemplates = false
+                showForm = false
+                showNotifications = false
+                detailHabit = null
+                viewModel.onEvent(HomeEvent.ClearHabitDetail)
+                showWorkouts = link == Deeplinks.WORKOUTS
+                showStepCounter = link == Deeplinks.STEPS
+                if (link == Deeplinks.SLEEP) {
+                    viewModel.onEvent(HomeEvent.SelectDate(System.currentTimeMillis()))
+                    if (!showSleep) openSleep()
+                } else {
+                    showSleep = false
+                }
+            }
             link.startsWith("habits://today") -> viewModel.onEvent(HomeEvent.OnHome)
             link.startsWith("habits://analytics") -> viewModel.onEvent(HomeEvent.OnStatistic)
             link.startsWith("habits://templates") -> showTemplates = true
@@ -104,14 +209,24 @@ fun HomeScreen(
         onDeeplinkHandled()
     }
 
-    LaunchedEffect(state.showOpenAds) {
+    LaunchedEffect(state.showOpenAds, activity) {
         if (state.showOpenAds) {
-            // Показать рекламу здесь
-            showOpenAds(
-                baseContext = context,
-                activity = activity
-            )
+            showAppOpenAd(activity, MyApplication.platformConfig.adsConfig.openAdsId, adLoading)
         }
+    }
+
+    LaunchedEffect(viewModel, activity, adLoading) {
+        viewModel.habitCreated.collect {
+            if (appStats.hasUsedForHours(12)) launch {
+                InterstitialAds.showIfAvailable(activity, interstitial.habitCreation, adLoading, cooldownMillis = 65_000L)
+            }
+        }
+    }
+
+    // Child screens register later and handle Back before the tab fallback.
+    BackHandler(enabled = state.mainScreenState != MainScreenStates.Home) {
+        viewModel.onEvent(HomeEvent.OnHome)
+        navBarVisible = true
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -120,6 +235,9 @@ fun HomeScreen(
 
         if (isExpanded) {
             TabletShell(
+                onOpenStepCounter = { showStepCounter = true },
+                onOpenWorkouts = { showWorkouts = true },
+                onOpenSleep = ::openSleep,
                 state = state,
                 settingsViewModel = settingsViewModel,
                 isDark = isDarkTheme,
@@ -127,10 +245,7 @@ fun HomeScreen(
                 onNav = { target -> viewModel.onEvent(navEventFor(target)) },
                 onAdd = { formHabit = null; showForm = true },
                 onSelectDate = { millis -> viewModel.onEvent(HomeEvent.SelectDate(millis)) },
-                onToggleDone = { habitId, done ->
-                    if (done) viewModel.onEvent(HomeEvent.MarkHabitCompleted(habitId))
-                    else viewModel.onEvent(HomeEvent.UnmarkHabitCompleted(habitId))
-                },
+                onToggleDone = { habitId, done -> toggleHabit(habitId, done) },
                 onHabitClick = { habit ->
                     detailHabit = habit
                     viewModel.onEvent(HomeEvent.LoadHabitDetail(habit.id))
@@ -163,15 +278,13 @@ fun HomeScreen(
     ) { innerPadding ->
 
       androidx.compose.foundation.layout.Box(modifier = Modifier.nestedScroll(navScrollConnection)) {
+        tabStates.SaveableStateProvider(state.mainScreenState.toString()) {
         when (state.mainScreenState) {
             MainScreenStates.Home -> {
                 TodayScreen(
                     state = state,
                     onSelectDate = { millis -> viewModel.onEvent(HomeEvent.SelectDate(millis)) },
-                    onToggleDone = { habitId, done ->
-                        if (done) viewModel.onEvent(HomeEvent.MarkHabitCompleted(habitId))
-                        else viewModel.onEvent(HomeEvent.UnmarkHabitCompleted(habitId))
-                    },
+                    onToggleDone = { habitId, done -> toggleHabit(habitId, done) },
                     onHabitClick = { habit ->
                         detailHabit = habit
                         viewModel.onEvent(HomeEvent.LoadHabitDetail(habit.id))
@@ -179,6 +292,9 @@ fun HomeScreen(
                     onOpenNotifications = { showNotifications = true },
                     onOpenTemplates = { showTemplates = true },
                     hasUnread = notificationsState.unreadCount > 0,
+                    onOpenStepCounter = { showStepCounter = true },
+                    onOpenWorkouts = { showWorkouts = true },
+                    onOpenSleep = ::openSleep,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(top = innerPadding.calculateTopPadding())
@@ -187,6 +303,9 @@ fun HomeScreen(
 
             MainScreenStates.Calendar -> {
                 CalendarScreen(
+                    onOpenStepCounter = { showStepCounter = true },
+                    onOpenWorkouts = { showWorkouts = true },
+                    onOpenSleep = ::openSleep,
                     state = state,
                     onSelectDate = { millis -> viewModel.onEvent(HomeEvent.SelectDate(millis)) },
                     onHabitClick = { habit ->
@@ -226,11 +345,25 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(top = innerPadding.calculateTopPadding())
+                        .consumeWindowInsets(PaddingValues(top = innerPadding.calculateTopPadding()))
                 )
             }
         }
+        }
       }
             }
+        }
+    }
+
+    if (showStepCounter) {
+        SlideInOnAppear {
+            StepCounterScreen(onBack = ::closeStepCounter)
+        }
+    }
+
+    if (showSleep) {
+        SlideInOnAppear {
+            SleepScreen(selectedDate = state.selectedDate, onBack = { showSleep = false }, onSaved = ::refreshAfterActivity)
         }
     }
 
@@ -263,12 +396,39 @@ fun HomeScreen(
                 viewModel.onEvent(HomeEvent.ClearHabitDetail)
             },
             onToggleToday = { done ->
-                if (done) viewModel.onEvent(HomeEvent.MarkHabitCompleted(habit.id))
-                else viewModel.onEvent(HomeEvent.UnmarkHabitCompleted(habit.id))
+                toggleHabit(habit.id, done, System.currentTimeMillis())
                 viewModel.onEvent(HomeEvent.LoadHabitDetail(habit.id))
             },
         )
       }
+    }
+
+    if (showWorkouts) {
+        SlideInOnAppear {
+            WorkoutScreen(
+                onBack = { showWorkouts = false },
+                onWorkoutFinished = ::refreshAfterActivity,
+                showCreationAd = {
+                    if (appStats.hasUsedForHours(24)) {
+                        InterstitialAds.showIfAvailable(activity, interstitial.workoutCreation, adLoading)
+                    }
+                },
+            )
+        }
+    }
+
+    sleepPrompt?.let { (day, record) ->
+        SleepEntryDialog(day = day, record = record, dateLocked = true,
+            onDismiss = { sleepPrompt = null },
+            onSaved = ::refreshAfterActivity)
+    }
+
+    activityError?.let { message ->
+        AlertDialog(
+            onDismissRequest = { activityError = null },
+            text = { Text(message) },
+            confirmButton = { TextButton(onClick = { activityError = null }) { Text("Понятно") } },
+        )
     }
 
     // §7 Форма «Новая привычка» / «Настроить привычку» — полноэкранный оверлей
@@ -309,6 +469,8 @@ fun HomeScreen(
       }
     }
 
+    AdLoadingDialog(adLoading)
+
 }
 
 /** §13: push-экран (оверлей) въезжает справа с фейдом при появлении. */
@@ -333,46 +495,4 @@ private fun navEventFor(target: MainScreenStates): HomeEvent = when (target) {
     MainScreenStates.Statistics -> HomeEvent.OnStatistic
     MainScreenStates.Notifications -> HomeEvent.OnNotifications
     MainScreenStates.Settings -> HomeEvent.OnSettings
-}
-
-
-private fun showOpenAds(baseContext: Context, activity: Activity?) {
-    val appOpenLoader = AppOpenAdLoader(baseContext)
-    val adRequestConfiguration =
-        AdRequestConfiguration.Builder(MyApplication.platformConfig.adsConfig.openAdsId).build()
-
-    val appOpenAdEventListener: AppOpenAdEventListener = object : AppOpenAdEventListener {
-        override fun onAdShown() {
-        }
-
-        override fun onAdDismissed() {
-
-        }
-
-        override fun onAdFailedToShow(adError: AdError) {
-
-        }
-
-        override fun onAdClicked() {
-
-        }
-
-        override fun onAdImpression(impressionData: ImpressionData?) {
-        }
-    }
-
-    val appOpenAdLoadListener: AppOpenAdLoadListener = object : AppOpenAdLoadListener {
-        override fun onAdFailedToLoad(error: AdRequestError) {
-        }
-
-        override fun onAdLoaded(appOpenAd: AppOpenAd) {
-            appOpenAd.setAdEventListener(appOpenAdEventListener)
-
-            if (activity != null)
-                appOpenAd.show(activity)
-        }
-    }
-
-    appOpenLoader.setAdLoadListener(appOpenAdLoadListener)
-    appOpenLoader.loadAd(adRequestConfiguration)
 }

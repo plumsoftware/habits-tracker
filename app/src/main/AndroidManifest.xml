@@ -3,6 +3,10 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
@@ -21,6 +25,11 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ТрекерПривычек">
+        <service
+            android:name=".data.service.StepCounterService"
+            android:exported="false"
+            android:foregroundServiceType="health" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -118,6 +127,42 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/quick_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".ui.widget.WorkoutWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_title_workout">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/workout_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".ui.widget.StepsWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_title_steps">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/steps_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".ui.widget.SleepWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_title_sleep">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/sleep_widget_info" />
         </receiver>
 
         <receiver

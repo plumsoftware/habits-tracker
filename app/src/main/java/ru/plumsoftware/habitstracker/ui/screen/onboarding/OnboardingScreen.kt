@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.RepeatMode
@@ -35,6 +36,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -44,6 +49,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -84,13 +92,19 @@ fun OnboardingScreen(onFinish: () -> Unit) {
         OnboardPage("📊", { colors.tileGreen }, "↑ 12%", "🏆 30 дней",
             "Стрики и честная аналитика",
             "Видно сильные дни, пропуски и связи между привычками. Без лишних цифр."),
-        OnboardPage("🔔", { colors.tileLilac }, "Напоминания", "Точно в 08:00",
-            "Разрешите напоминания",
-            "Нужно, чтобы уведомления приходили вовремя. Можно изменить в настройках."),
+        OnboardPage("🏋️", { colors.tileBlue }, "3 подхода", "45 минут",
+            "Тренировки под контролем",
+            "Создавайте тренировки, добавляйте упражнения и записывайте вес, повторения и прогресс."),
+        OnboardPage("🔔", { colors.tileLilac }, "Напоминания", "В нужное время",
+            "Настройте разрешения",
+            "Разрешите уведомления и фоновую работу, чтобы напоминания приходили вовремя."),
     )
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val scope = rememberCoroutineScope()
+    BackHandler(enabled = pagerState.currentPage > 0) {
+        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+    }
     val isLast = pagerState.currentPage == pages.lastIndex
 
     Column(
@@ -140,7 +154,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                 .weight(1f)
                 .fillMaxWidth(),
         ) { pageIndex ->
-            OnboardPageContent(pages[pageIndex], pageIndex == 3)
+            OnboardPageContent(pages[pageIndex], pageIndex == pages.lastIndex)
         }
 
         PrimaryButton(
@@ -274,76 +288,77 @@ private fun ExampleChips() {
 }
 
 private data class PermissionCard(
-    val icon: Int,
-    val iconTint: @Composable () -> Color,
-    val tile: @Composable () -> Color,
-    val title: String,
-    val description: String,
+    val icon: Int, val iconTint: @Composable () -> Color, val tile: @Composable () -> Color,
+    val title: String, val description: String,
 )
 
 @Composable
 private fun PermissionsBlock() {
     val colors = AppTheme.colors
     val context = LocalContext.current
-
-    val notifLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-    ) { /* результат не критичен */ }
-
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var resumeCount by remember { mutableIntStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) resumeCount++ }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val notificationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    val power = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+    val batteryGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || power.isIgnoringBatteryOptimizations(context.packageName)
+    val backgroundGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.P || !(context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).isBackgroundRestricted
+    @Suppress("UNUSED_VARIABLE") val permissionRefresh = resumeCount
     val cards = listOf(
-        PermissionCard(HabitIcons.bell, { colors.accent }, { colors.accentSoft },
-            "Уведомления", "Напоминания о привычках"),
-        PermissionCard(HabitIcons.clock, { colors.danger }, { colors.dangerSoft },
-            "Точные будильники", "Напоминание ровно в срок"),
-        PermissionCard(HabitIcons.navSettings, { colors.success }, { colors.successSoft },
-            "Работа в фоне", "Без отключения системой"),
+        PermissionCard(HabitIcons.bell, { colors.accent }, { colors.accentSoft }, "Уведомления", "Напоминания о привычках"),
+        PermissionCard(HabitIcons.navSettings, { colors.success }, { colors.successSoft }, "Фоновая работа", "Настройки фоновой активности"),
+        PermissionCard(HabitIcons.clock, { colors.success }, { colors.successSoft }, "Без ограничений батареи", "Не останавливать при простое"),
     )
-
     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
         cards.forEachIndexed { index, card ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .softShadow(AppTheme.elevation.card, AppTheme.shapes.cardS)
-                    .clip(AppTheme.shapes.cardS)
-                    .background(colors.surface)
-                    .padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                IconTile(
-                    res = card.icon, tint = card.iconTint(), background = card.tile(),
-                    tileSize = 42.dp, iconSize = 20.dp, shape = RoundedCornerShape(14.dp),
-                )
+            val granted = when (index) { 0 -> notificationGranted; 1 -> backgroundGranted; else -> batteryGranted }
+            Row(Modifier.fillMaxWidth().softShadow(AppTheme.elevation.card, AppTheme.shapes.cardS)
+                .clip(AppTheme.shapes.cardS).background(colors.surface).padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                IconTile(res = card.icon, tint = card.iconTint(), background = card.tile(), tileSize = 42.dp, iconSize = 20.dp, shape = RoundedCornerShape(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(card.title, style = AppTheme.type.bodyS, color = colors.textPrimary)
                     Text(card.description, style = AppTheme.type.caption, color = colors.textSecondary)
                 }
-                PillChip(
-                    text = "Разрешить",
-                    background = colors.accent,
-                    contentColor = colors.inkOn,
-                    onClick = { requestPermission(context, index, notifLauncher::launch) },
-                )
+                if (granted) {
+                    Box(Modifier.size(34.dp).clip(CircleShape).background(colors.successSoft), contentAlignment = Alignment.Center) {
+                        Text("✓", color = colors.success, fontSize = 21.sp)
+                    }
+                } else {
+                    PillChip("Разрешить", colors.accent, colors.inkOn, onClick = {
+                        when (index) {
+                            0 -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            1 -> openBackgroundSettings(context)
+                            2 -> requestBatteryExemption(context)
+                        }
+                    })
+                }
             }
         }
     }
 }
 
-private fun requestPermission(context: Context, index: Int, requestNotif: (String) -> Unit) {
-    when (index) {
-        0 -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requestNotif(Manifest.permission.POST_NOTIFICATIONS)
-        }
-        1 -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            runCatching {
-                context.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
+private fun openBackgroundSettings(context: Context) {
+    val appDetails = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName))
+    val batterySettings = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+    val target = if (appDetails.resolveActivity(context.packageManager) != null) appDetails else batterySettings
+    runCatching { context.startActivity(target) }
+}
+
+private fun requestBatteryExemption(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        val power = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        if (!power.isIgnoringBatteryOptimizations(context.packageName)) {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:" + context.packageName)
             }
-        }
-        2 -> runCatching {
-            context.startActivity(
-                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
-            )
+            runCatching { context.startActivity(intent) }
         }
     }
 }

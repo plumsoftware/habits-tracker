@@ -17,3 +17,7 @@ local.properties
 # Локальные материалы Claude Code
 /CLAUDE.md
 /tasks/
+/.idea/
+/.kotlin/
+/app/rustore/
+/app/huawei/

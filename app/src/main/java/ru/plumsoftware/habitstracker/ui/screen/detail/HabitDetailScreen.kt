@@ -1,9 +1,13 @@
 package ru.plumsoftware.habitstracker.ui.screen.detail
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,8 +32,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.plumsoftware.habitstracker.data.model.Category
@@ -44,7 +48,7 @@ import ru.plumsoftware.habitstracker.ui.theme.AppTheme
 import ru.plumsoftware.habitstracker.ui.theme.softShadow
 
 /**
- * Экран «Детали привычки» (ТЗ §8): тёмная карточка стрика, тепловая карта 18 недель,
+ * Экран «Детали привычки» (ТЗ §8): карточка серии, тепловая карта 18 недель,
  * график по дням недели, кнопка отметки.
  */
 @Composable
@@ -58,10 +62,11 @@ fun HabitDetailScreen(
     onArchive: () -> Unit,
     onToggleToday: (Boolean) -> Unit,
 ) {
+    BackHandler(onBack = onBack)
+
     val colors = AppTheme.colors
     val spacing = AppTheme.spacing
     val d = detail ?: HabitDetail(habitId = habit.id)
-    val catColor = category?.let { Color(it.colorArgb) } ?: colors.accent
 
     Column(
         modifier = Modifier.fillMaxSize().background(colors.bgScreen).windowInsetsPadding(WindowInsets.safeDrawing),
@@ -85,13 +90,13 @@ fun HabitDetailScreen(
             Spacer(Modifier.width(8.dp))
             Row(
                 modifier = Modifier.softShadow(AppTheme.elevation.subtle, RoundedCornerShape(14.dp))
-                    .clip(RoundedCornerShape(14.dp)).background(colors.surface).clickableNoRipple(onClick = onEdit)
+                    .clip(RoundedCornerShape(14.dp)).background(colors.accentSoft).clickableNoRipple(onClick = onEdit)
                     .padding(horizontal = 15.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                AppIcon(HabitIcons.tune, tint = colors.textPrimary, size = 15.dp)
-                Text("Настроить", style = AppTheme.type.label, color = colors.textPrimary)
+                AppIcon(HabitIcons.tune, tint = colors.accent, size = 15.dp)
+                Text("Настроить", style = AppTheme.type.label, color = colors.accent)
             }
         }
 
@@ -127,55 +132,58 @@ fun HabitDetailScreen(
     }
 }
 
-// §8.2 Тёмная карточка стрика
+// §8.2 Карточка серии
 
 @Composable
 private fun StreakCard(habit: Habit, category: Category?, detail: HabitDetail) {
     val colors = AppTheme.colors
-    val white = colors.inkOn
+    val iconTint = category?.let { Color(it.colorArgb) } ?: colors.accent
     Column(
         modifier = Modifier.fillMaxWidth()
-            .softShadow(AppTheme.elevation.inkCard, AppTheme.shapes.cardXL)
-            .clip(AppTheme.shapes.cardXL).background(colors.ink).padding(22.dp),
+            .softShadow(AppTheme.elevation.cardRaised, AppTheme.shapes.cardXL)
+            .clip(AppTheme.shapes.cardXL)
+            .background(Brush.verticalGradient(listOf(colors.surface, colors.tileBlue)))
+            .padding(20.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Box(
-                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.12f)),
+                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(20.dp)).background(iconTint.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center,
             ) { Text(habit.emoji.ifBlank { "🎯" }, fontSize = 27.sp) }
-            Column {
-                Text(habit.title.trim(), style = AppTheme.type.h3.copy(fontSize = 18.sp), color = white)
-                Text(scheduleSummary(habit, category), style = AppTheme.type.caption, color = white.copy(alpha = 0.6f))
+            Column(Modifier.weight(1f)) {
+                Text(habit.title.trim(), style = AppTheme.type.h3, color = colors.textPrimary)
+                Text(scheduleSummary(habit, category), style = AppTheme.type.caption, color = colors.textSecondary)
             }
         }
         Spacer(Modifier.height(20.dp))
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("${detail.currentStreak}", style = AppTheme.type.numXL, color = white)
+            Text("${detail.currentStreak}", style = AppTheme.type.numXL, color = colors.accent)
             Column(Modifier.padding(bottom = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    AppIcon(HabitIcons.flame, tint = Color(0xFFFFB84D), size = 14.dp)
-                    Text("дней подряд", style = AppTheme.type.label, color = Color(0xFFFFB84D))
+                    AppIcon(HabitIcons.flame, tint = colors.accent, size = 14.dp)
+                    Text("дней подряд", style = AppTheme.type.label, color = colors.accent)
                 }
-                Text("Лучшая серия: ${detail.bestStreak}", style = AppTheme.type.caption, color = white.copy(alpha = 0.55f))
+                Text("Лучшая серия: ${detail.bestStreak}", style = AppTheme.type.caption, color = colors.textSecondary)
             }
         }
         Spacer(Modifier.height(18.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            StatTile(Modifier.weight(1f), "${detail.totalChecks}", "всего отметок")
-            StatTile(Modifier.weight(1f), "${detail.successRate}%", "успешность")
-            StatTile(Modifier.weight(1f), "${detail.missedDays}", "пропуска")
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatTile(Modifier.weight(1f).fillMaxHeight(), "${detail.totalChecks}", "Отметки")
+            StatTile(Modifier.weight(1f).fillMaxHeight(), "${detail.successRate}%", "Выполнено")
+            StatTile(Modifier.weight(1f).fillMaxHeight(), "${detail.missedDays}", "Пропуски")
         }
     }
 }
 
 @Composable
 private fun StatTile(modifier: Modifier, value: String, label: String) {
-    val white = AppTheme.colors.inkOn
+    val colors = AppTheme.colors
     Column(
-        modifier = modifier.clip(RoundedCornerShape(18.dp)).background(Color.White.copy(alpha = 0.10f)).padding(12.dp),
+        modifier = modifier.clip(RoundedCornerShape(16.dp)).background(colors.surface).padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(value, style = AppTheme.type.h5.copy(fontSize = 17.sp), color = white)
-        Text(label, style = AppTheme.type.captionS, color = white.copy(alpha = 0.6f))
+        Text(value, style = AppTheme.type.h5, color = colors.accent)
+        Text(label, style = AppTheme.type.captionS, color = colors.textSecondary)
     }
 }
 
@@ -202,17 +210,18 @@ private fun HeatmapCard(detail: HabitDetail) {
             .clip(AppTheme.shapes.cardL).background(colors.surface).padding(18.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Последние 18 недель", style = AppTheme.type.h5, color = colors.textPrimary)
+            Text("Последние 18 недель", modifier = Modifier.weight(1f).padding(end = 8.dp),
+                style = AppTheme.type.h5, color = colors.textPrimary)
             Text("$rate% выполнено", style = AppTheme.type.captionS, color = colors.textSecondary)
         }
         Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             for (col in 0 until 18) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     for (row in 0 until 7) {
                         val v = cells.getOrElse(col * 7 + row) { 0 }
                         Box(
-                            modifier = Modifier.size(11.dp).clip(AppTheme.shapes.heatCell)
+                            modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(AppTheme.shapes.heatCell)
                                 .background(
                                     when (v) {
                                         1 -> colors.heat3
@@ -228,7 +237,7 @@ private fun HeatmapCard(detail: HabitDetail) {
         if (detail.frozenDays.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.size(11.dp).clip(AppTheme.shapes.heatCell).background(colors.info))
+                Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(AppTheme.shapes.heatCell).background(colors.info))
                 Text("❄ Заморозка сохранила серию (${detail.frozenDays.size})", style = AppTheme.type.captionS, color = colors.textSecondary)
             }
         }
@@ -266,7 +275,11 @@ private fun WeekdayChart(detail: HabitDetail) {
                         modifier = Modifier.fillMaxWidth()
                             .height((fraction * 100).dp.coerceAtLeast(4.dp))
                             .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp, bottomStart = 8.dp, bottomEnd = 8.dp))
-                            .background(if (i == maxIndex && c > 0) colors.ink else colors.accent)
+                            .background(when {
+                                c == 0 -> colors.heat0
+                                i == maxIndex -> colors.accent
+                                else -> colors.accent.copy(alpha = 0.45f)
+                            })
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(labels[i], style = AppTheme.type.captionS, color = colors.textSecondary)

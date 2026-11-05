@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -451,19 +452,24 @@ private val QUIET_PRESETS = listOf(QuietPreset(22, 7), QuietPreset(23, 8), Quiet
 @Composable
 private fun StreakBanner(streak: Int, freezes: Int) {
     val colors = AppTheme.colors
+    val shape = RoundedCornerShape(26.dp)
     Row(
-        modifier = Modifier.fillMaxWidth().softShadow(AppTheme.elevation.inkCard, RoundedCornerShape(26.dp))
-            .clip(RoundedCornerShape(26.dp)).background(colors.ink).padding(17.dp),
+        modifier = Modifier.fillMaxWidth()
+            .softShadow(AppTheme.elevation.cardRaised, shape)
+            .clip(shape)
+            .background(Brush.horizontalGradient(listOf(colors.surface, colors.tileBlue)))
+            .padding(17.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(13.dp),
     ) {
         Box(
-            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(15.dp)).background(Color.White.copy(alpha = 0.12f)),
+            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(colors.tileYellow),
             contentAlignment = Alignment.Center,
-        ) { AppIcon(HabitIcons.flame, tint = Color(0xFFFFB84D), size = 21.dp) }
-        Column {
-            Text("$streak ${daysWord(streak)} без пропусков", style = AppTheme.type.body, color = colors.inkOn)
-            Text("$freezes заморозки доступны на этой неделе", style = AppTheme.type.caption, color = colors.inkOn.copy(alpha = 0.6f))
+        ) { AppIcon(HabitIcons.flame, tint = colors.tileYellowText, size = 23.dp) }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Текущая серия", style = AppTheme.type.captionS, color = colors.tileBlueText)
+            Text("$streak ${daysWord(streak)} без пропусков", style = AppTheme.type.h5, color = colors.textPrimary)
+            Text("Заморозки на эту неделю: $freezes", style = AppTheme.type.caption, color = colors.textSecondary)
         }
     }
 }

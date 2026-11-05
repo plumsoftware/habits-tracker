@@ -1,5 +1,6 @@
 package ru.plumsoftware.habitstracker.ui.screen.form
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -56,6 +57,7 @@ import ru.plumsoftware.habitstracker.data.model.Category
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.data.model.Periodicity
 import ru.plumsoftware.habitstracker.ui.components.AppIcon
+import ru.plumsoftware.habitstracker.ui.components.AppScreenTopBar
 import ru.plumsoftware.habitstracker.ui.components.HabitIcons
 import ru.plumsoftware.habitstracker.ui.components.IconTile
 import ru.plumsoftware.habitstracker.ui.components.PrimaryButton
@@ -91,6 +93,8 @@ fun HabitFormScreen(
     onOpenTemplates: () -> Unit = {},
     onCreateCategory: (String, Long) -> Unit = { _, _ -> },
 ) {
+    BackHandler(onBack = onBack)
+
     val colors = AppTheme.colors
     val spacing = AppTheme.spacing
     val isEdit = editing != null
@@ -163,6 +167,7 @@ fun HabitFormScreen(
             weekdays = if (byWeekdays) weekdaySet.value.sorted().joinToString(",") else "",
             chainedAfterId = chainedAfterId,
             freezeEnabled = freezeEnabled,
+            activityLink = editing?.activityLink,
         )
     }
 
@@ -172,16 +177,10 @@ fun HabitFormScreen(
             .background(colors.bgScreen)
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        // Хедер
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = spacing.screenH, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            IconSquare(HabitIcons.chevronLeft, onBack, 40.dp, 24.dp)
-            Text(if (isEdit) "Настроить привычку" else "Новая привычка", style = AppTheme.type.h2, color = colors.textPrimary)
-            Spacer(Modifier.weight(1f))
-        }
+        AppScreenTopBar(
+            title = if (isEdit) "Настроить привычку" else "Новая привычка",
+            onBack = onBack,
+        )
 
         LazyColumn(
             contentPadding = PaddingValues(

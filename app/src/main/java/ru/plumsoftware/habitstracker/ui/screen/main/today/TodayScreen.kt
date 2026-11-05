@@ -1,5 +1,6 @@
 package ru.plumsoftware.habitstracker.ui.screen.main.today
 
+import ru.plumsoftware.habitstracker.ui.components.ActivityShortcuts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -52,7 +53,6 @@ import ru.plumsoftware.habitstracker.data.model.HabitWithStatus
 import ru.plumsoftware.habitstracker.ui.components.AppIcon
 import ru.plumsoftware.habitstracker.ui.components.HabitIcons
 import ru.plumsoftware.habitstracker.ui.components.PillChip
-import ru.plumsoftware.habitstracker.ui.components.PrimaryButton
 import ru.plumsoftware.habitstracker.ui.components.clickableNoRipple
 import ru.plumsoftware.habitstracker.ui.screen.main.home.DailyStats
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeState
@@ -77,6 +77,9 @@ fun TodayScreen(
     onOpenNotifications: () -> Unit,
     onOpenTemplates: () -> Unit,
     hasUnread: Boolean = false,
+    onOpenStepCounter: () -> Unit = {},
+    onOpenWorkouts: () -> Unit = {},
+    onOpenSleep: () -> Unit = {},
 ) {
     val colors = AppTheme.colors
     val spacing = AppTheme.spacing
@@ -106,12 +109,16 @@ fun TodayScreen(
     ) {
         item { Header(onOpenNotifications = onOpenNotifications, hasUnread = hasUnread) }
 
+        item { WeekStrip(state = state, onSelectDate = onSelectDate) }
+        if (habits.isNotEmpty()) item {
+            ProgressBanner(dailyStats = state.dailyStats, streak = state.overallStreak)
+        }
+        item { ActivityShortcuts(selectedMillis, onOpenStepCounter, onOpenWorkouts, onOpenSleep, filledIconSize = 40.dp, emptyIconFraction = 0.54f) }
+        item { TemplatesBlock(onOpenTemplates = onOpenTemplates) }
+
         if (habits.isEmpty()) {
-            item { WeekStrip(state = state, onSelectDate = onSelectDate) }
-            item { EmptyState(onOpenTemplates = onOpenTemplates) }
+            item { EmptyState() }
         } else {
-            item { ProgressBanner(dailyStats = state.dailyStats, streak = state.overallStreak) }
-            item { WeekStrip(state = state, onSelectDate = onSelectDate) }
             item { ListHeader(dailyStats = state.dailyStats, isToday = isToday, selectedMillis = selectedMillis) }
             val ordered = orderChains(habits)
             items(ordered, key = { it.hws.habit.id }) { row ->
@@ -141,7 +148,6 @@ fun TodayScreen(
                     }
                 }
             }
-            item { TemplatesBlock(onOpenTemplates = onOpenTemplates) }
         }
     }
 }
@@ -648,7 +654,7 @@ private fun TemplatesBlock(onOpenTemplates: () -> Unit) {
         ) { AppIcon(HabitIcons.sparkles, tint = colors.accent, size = 19.dp) }
         Column(Modifier.weight(1f)) {
             Text("Добавить из шаблонов", style = AppTheme.type.bodyS, color = colors.textPrimary)
-            Text("60+ готовых привычек и подборок", style = AppTheme.type.caption, color = colors.textSecondary)
+            Text("Готовые привычки и подборки", style = AppTheme.type.caption, color = colors.textSecondary)
         }
         AppIcon(HabitIcons.chevronRight, tint = colors.accent, size = 16.dp)
     }
@@ -657,7 +663,7 @@ private fun TemplatesBlock(onOpenTemplates: () -> Unit) {
 // ---------- Empty state ----------
 
 @Composable
-private fun EmptyState(onOpenTemplates: () -> Unit) {
+private fun EmptyState() {
     val colors = AppTheme.colors
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
@@ -677,7 +683,6 @@ private fun EmptyState(onOpenTemplates: () -> Unit) {
             "Начните с готового шаблона — это 10 секунд",
             style = AppTheme.type.caption, color = colors.textSecondary,
         )
-        PrimaryButton(text = "Выбрать шаблон", onClick = onOpenTemplates, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
@@ -695,6 +700,9 @@ fun TodayScreenTablet(
     onOpenNotifications: () -> Unit,
     onOpenTemplates: () -> Unit,
     hasUnread: Boolean = false,
+    onOpenStepCounter: () -> Unit = {},
+    onOpenWorkouts: () -> Unit = {},
+    onOpenSleep: () -> Unit = {},
 ) {
     val colors = AppTheme.colors
     val spacing = AppTheme.spacing
@@ -718,8 +726,9 @@ fun TodayScreenTablet(
             verticalArrangement = Arrangement.spacedBy(spacing.sectionGap),
         ) {
             Header(onOpenNotifications = onOpenNotifications, hasUnread = hasUnread)
-            if (habits.isNotEmpty()) ProgressBanner(dailyStats = state.dailyStats, streak = state.overallStreak)
             WeekStrip(state = state, onSelectDate = onSelectDate)
+            if (habits.isNotEmpty()) ProgressBanner(dailyStats = state.dailyStats, streak = state.overallStreak)
+            ActivityShortcuts(selectedMillis, onOpenStepCounter, onOpenWorkouts, onOpenSleep, filledIconSize = 40.dp, emptyIconFraction = 0.54f)
             TemplatesBlock(onOpenTemplates = onOpenTemplates)
             Spacer(Modifier.height(spacing.screenBottomPlain))
         }
@@ -727,7 +736,7 @@ fun TodayScreenTablet(
         // Правая колонка — список привычек
         if (habits.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                EmptyState(onOpenTemplates = onOpenTemplates)
+                EmptyState()
             }
         } else {
             LazyColumn(
@@ -878,3 +887,55 @@ private fun Modifier.dashedBorder(color: Color, shape: androidx.compose.ui.graph
         }
     }
 
+
+
+@Composable
+private fun StepCounterEntry(onClick: () -> Unit) {
+    val colors = AppTheme.colors
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(colors.surface)
+            .clickableNoRipple(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(
+            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(colors.accentSoft),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("👟", fontSize = 24.sp)
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text("Шагомер", color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Text("Автоматический подсчёт активности", color = colors.textSecondary, fontSize = 12.sp)
+        }
+        Text("Открыть  ›", color = colors.accent, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+    }
+}
+
+
+@Composable
+private fun WorkoutEntry(onClick: () -> Unit) {
+    val colors = AppTheme.colors
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(colors.surface)
+            .clickableNoRipple(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Box(
+            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(colors.accentSoft),
+            contentAlignment = Alignment.Center
+        ) { Text("🏋️", fontSize = 24.sp) }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text("Тренировки", color = colors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            Text("Упражнения, подходы и рабочие веса", color = colors.textSecondary, fontSize = 12.sp)
+        }
+        Text("Открыть  ›", color = colors.accent, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+    }
+}
