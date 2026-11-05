@@ -33,10 +33,13 @@ internal object InterstitialAds {
         cooldownMillis: Long = defaultCooldownMillis,
     ) {
         withContext(Dispatchers.Main.immediate) {
-            if (activity == null || placementId.isBlank() || inProgress || !activity.canShowAd()) return@withContext
+            if (activity == null || inProgress || !activity.canShowAd()) return@withContext
+            if (!BuildConfig.DEBUG && placementId.isBlank()) return@withContext
             val lastShow = lastShownAt
             val requiredInterval = maxOf(lastCooldownMillis, cooldownMillis)
-            if (lastShow != null && SystemClock.elapsedRealtime() - lastShow < requiredInterval) return@withContext
+            if (!BuildConfig.DEBUG && lastShow != null && SystemClock.elapsedRealtime() - lastShow < requiredInterval) {
+                return@withContext
+            }
 
             loading.present {
                 inProgress = true

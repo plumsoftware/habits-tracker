@@ -3,6 +3,7 @@ package ru.plumsoftware.habitstracker.data.database
 import android.content.Context
 import androidx.core.content.edit
 import org.koin.dsl.module
+import ru.plumsoftware.habitstracker.BuildConfig
 
 class AppStatsRepository(private val context: Context) {
 
@@ -40,6 +41,7 @@ class AppStatsRepository(private val context: Context) {
     }
 
     fun hasUsedForHours(hours: Int): Boolean {
+        if (BuildConfig.DEBUG) return true
         val firstLaunch = sharedPreferences.getLong(KEY_FIRST_LAUNCH, 0L)
         return firstLaunch > 0L && System.currentTimeMillis() - firstLaunch >= hours * MILLIS_PER_HOUR
     }
