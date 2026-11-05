@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import ru.plumsoftware.habitstracker.data.model.Category
 import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.ui.components.AppIcon
+import ru.plumsoftware.habitstracker.ui.components.ActivityShortcuts
 import ru.plumsoftware.habitstracker.ui.components.HabitIcons
 import ru.plumsoftware.habitstracker.ui.components.clickableNoRipple
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeState
@@ -54,6 +55,9 @@ fun CalendarScreen(
     modifier: Modifier = Modifier,
     onSelectDate: (Long) -> Unit,
     onHabitClick: (Habit) -> Unit,
+    onOpenStepCounter: () -> Unit = {},
+    onOpenWorkouts: () -> Unit = {},
+    onOpenSleep: () -> Unit = {},
 ) {
     val colors = AppTheme.colors
     val spacing = AppTheme.spacing
@@ -106,6 +110,9 @@ fun CalendarScreen(
             )
         }
         item {
+            ActivityShortcuts(selectedMillis, onOpenStepCounter, onOpenWorkouts, onOpenSleep)
+        }
+        item {
             SelectedDayCard(
                 state = state,
                 selectedMillis = selectedMillis,
@@ -126,6 +133,9 @@ fun CalendarScreenTablet(
     modifier: Modifier = Modifier,
     onSelectDate: (Long) -> Unit,
     onHabitClick: (Habit) -> Unit,
+    onOpenStepCounter: () -> Unit = {},
+    onOpenWorkouts: () -> Unit = {},
+    onOpenSleep: () -> Unit = {},
 ) {
     val colors = AppTheme.colors
     val spacing = AppTheme.spacing
@@ -172,6 +182,7 @@ fun CalendarScreenTablet(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(spacing.sectionGap),
         ) {
+            ActivityShortcuts(selectedMillis, onOpenStepCounter, onOpenWorkouts, onOpenSleep)
             SelectedDayCard(state = state, selectedMillis = selectedMillis, filterHabitId = filterHabitId, onHabitClick = onHabitClick)
             Spacer(Modifier.height(spacing.screenBottomPlain))
         }
@@ -456,6 +467,8 @@ private fun SelectedDayCard(
     selectedMillis: Long,
     filterHabitId: String?,
     onHabitClick: (Habit) -> Unit,
+    onOpenStepCounter: () -> Unit = {},
+    onOpenWorkouts: () -> Unit = {},
 ) {
     val colors = AppTheme.colors
     val todayStart = System.currentTimeMillis().startOfDay()

@@ -1,5 +1,6 @@
 package ru.plumsoftware.habitstracker.ui.screen.form
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -92,6 +93,8 @@ fun HabitFormScreen(
     onOpenTemplates: () -> Unit = {},
     onCreateCategory: (String, Long) -> Unit = { _, _ -> },
 ) {
+    BackHandler(onBack = onBack)
+
     val colors = AppTheme.colors
     val spacing = AppTheme.spacing
     val isEdit = editing != null
@@ -164,6 +167,7 @@ fun HabitFormScreen(
             weekdays = if (byWeekdays) weekdaySet.value.sorted().joinToString(",") else "",
             chainedAfterId = chainedAfterId,
             freezeEnabled = freezeEnabled,
+            activityLink = editing?.activityLink,
         )
     }
 

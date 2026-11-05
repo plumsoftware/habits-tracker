@@ -1,6 +1,7 @@
 package ru.plumsoftware.habitstracker.ui.screen.main.workouts
 
 import android.graphics.Bitmap
+import androidx.activity.compose.BackHandler
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
@@ -12,7 +13,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,16 +31,19 @@ import ru.plumsoftware.habitstracker.data.database.WellnessRepository
 import ru.plumsoftware.habitstracker.data.model.WorkoutSession
 import ru.plumsoftware.habitstracker.data.model.WorkoutSet
 import ru.plumsoftware.habitstracker.ui.components.AppScreenTopBar
-import ru.plumsoftware.habitstracker.ui.components.PrimaryButton
 import ru.plumsoftware.habitstracker.ui.components.PillChip
 import ru.plumsoftware.habitstracker.ui.components.clickableNoRipple
 import ru.plumsoftware.habitstracker.ui.theme.AppTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.zip.ZipInputStream
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.foundation.Canvas
+import ru.plumsoftware.habitstracker.R
 
-private enum class WorkoutRoute { HOME, EDITOR, HISTORY, TEMPLATES, SETTINGS, PROGRESS, EXERCISE_PICKER, DETAIL, REST_TIMER }
+private enum class WorkoutRoute { HOME, EDITOR, HISTORY, TEMPLATES, TEMPLATE_DETAIL, SETTINGS, PROGRESS, EXERCISE_PICKER, DETAIL, REST_TIMER }
 
 private data class WorkoutTemplate(
     val title: String, val subtitle: String, val duration: String, val icon: String,
@@ -62,22 +70,29 @@ private val exerciseCatalog = listOf(
 )
 
 @Composable
-fun WorkoutScreen(onBack: () -> Unit) {
+fun WorkoutScreen(
+    onBack: () -> Unit,
+    onWorkoutFinished: () -> Unit = {},
+    showCreationAd: suspend () -> Unit = {},
+) {
     val repository: WellnessRepository = koinInject()
     val scope = rememberCoroutineScope()
+    val screenStates = rememberSaveableStateHolder()
     val colors = AppTheme.colors
     val sessions by repository.workouts().collectAsState(initial = emptyList())
     var route by remember { mutableStateOf(WorkoutRoute.HOME) }
+    var previewTemplate by remember { mutableStateOf(workoutTemplates.first()) }
+    var templateFilter by rememberSaveable { mutableStateOf("Все") }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var title by remember { mutableStateOf("Моя тренировка") }
     var exerciseName by remember { mutableStateOf("") }
-    var search by remember { mutableStateOf("") }
     var showCustomWorkoutDialog by remember { mutableStateOf(false) }
+    var creatingWorkout by remember { mutableStateOf(false) }
     var showDeleteWorkoutDialog by remember { mutableStateOf(false) }
     var showRenameWorkoutDialog by remember { mutableStateOf(false) }
     var renameValue by remember { mutableStateOf("") }
     var clockTick by remember { mutableStateOf(System.currentTimeMillis()) }
-    var filter by remember { mutableStateOf("Все") }
+    var filter by rememberSaveable { mutableStateOf("Все") }
 
     val active = sessions.firstOrNull { it.endedAtMillis == null }
     LaunchedEffect(active?.id) { while (active != null) { delay(1_000); clockTick = System.currentTimeMillis() } }
@@ -90,40 +105,64 @@ fun WorkoutScreen(onBack: () -> Unit) {
         selectedId = id
         route = WorkoutRoute.EDITOR
     }
-    fun startTemplate(template: WorkoutTemplate) {
+    fun createWorkout(name: String, exercises: List<String> = emptyList(), adBeforeCreation: Boolean) {
+        if (creatingWorkout) return
+        creatingWorkout = true
         scope.launch {
-            val id = repository.startWorkout(template.title)
-            template.exercises.forEach { repository.addExercise(id, it) }
-            selectedId = id
-            route = WorkoutRoute.EDITOR
+            try {
+                if (adBeforeCreation) showCreationAd()
+                val id = repository.startWorkout(name)
+                exercises.forEach { repository.addExercise(id, it) }
+                if (!adBeforeCreation) showCreationAd()
+                showCustomWorkoutDialog = false
+                openEditor(id)
+            } finally {
+                creatingWorkout = false
+            }
         }
     }
 
-    Column(Modifier.fillMaxSize().background(colors.bgScreen)) {
+    val navigateBack: () -> Unit = {
+        if (!creatingWorkout) {
+            when (route) {
+                WorkoutRoute.HOME -> onBack()
+                WorkoutRoute.EDITOR -> route = if (editorSession?.endedAtMillis != null) WorkoutRoute.DETAIL else WorkoutRoute.HOME
+                WorkoutRoute.HISTORY, WorkoutRoute.TEMPLATES, WorkoutRoute.SETTINGS, WorkoutRoute.PROGRESS -> route = WorkoutRoute.HOME
+                WorkoutRoute.TEMPLATE_DETAIL -> route = WorkoutRoute.TEMPLATES
+                WorkoutRoute.EXERCISE_PICKER -> route = WorkoutRoute.EDITOR
+                WorkoutRoute.DETAIL -> route = WorkoutRoute.HISTORY
+                WorkoutRoute.REST_TIMER -> route = WorkoutRoute.EDITOR
+            }
+        }
+    }
+    BackHandler(onBack = navigateBack)
+
+    Column(Modifier.fillMaxSize().background(colors.bgScreen)
+        .windowInsetsPadding(WindowInsets.safeDrawing)) {
         AppScreenTopBar(
             title = when (route) {
                 WorkoutRoute.HOME -> "Тренировки"
                 WorkoutRoute.EDITOR -> editorSession?.title ?: "Создать тренировку"
                 WorkoutRoute.HISTORY -> "История"
                 WorkoutRoute.TEMPLATES -> "Шаблоны"
+                WorkoutRoute.TEMPLATE_DETAIL -> "Программа тренировки"
                 WorkoutRoute.SETTINGS -> "Настройки"
                 WorkoutRoute.PROGRESS -> "Прогресс"
                 WorkoutRoute.EXERCISE_PICKER -> "Добавить упражнение"
                 WorkoutRoute.DETAIL -> selected?.title ?: "Тренировка"
                 WorkoutRoute.REST_TIMER -> "Отдых между подходами"
             },
-            onBack = {
-                when (route) {
-                    WorkoutRoute.HOME -> onBack()
-                    WorkoutRoute.EDITOR -> if (editorSession?.endedAtMillis != null) route = WorkoutRoute.DETAIL else route = WorkoutRoute.HOME
-                    WorkoutRoute.HISTORY, WorkoutRoute.TEMPLATES, WorkoutRoute.SETTINGS, WorkoutRoute.PROGRESS -> route = WorkoutRoute.HOME
-                    WorkoutRoute.EXERCISE_PICKER -> route = WorkoutRoute.EDITOR
-                    WorkoutRoute.DETAIL -> route = WorkoutRoute.HISTORY
-                    WorkoutRoute.REST_TIMER -> route = WorkoutRoute.EDITOR
-                }
-            },
+            onBack = navigateBack,
         )
 
+        val screenKey = when (route) {
+            WorkoutRoute.EDITOR -> "editor:${editorSession?.id.orEmpty()}"
+            WorkoutRoute.DETAIL -> "detail:${selectedId.orEmpty()}"
+            WorkoutRoute.TEMPLATE_DETAIL -> "template:${previewTemplate.title}"
+            WorkoutRoute.EXERCISE_PICKER -> "picker:${editorSession?.id.orEmpty()}"
+            else -> route.name
+        }
+        screenStates.SaveableStateProvider(screenKey) {
         when (route) {
             WorkoutRoute.HOME -> LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -140,11 +179,15 @@ fun WorkoutScreen(onBack: () -> Unit) {
                             .background(colors.accentSoft).padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        WorkoutIllustration("equipment_dumbbell_large", Modifier.size(112.dp))
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            WorkoutIllustration("equipment_dumbbell_large", Modifier.weight(1f).height(104.dp))
+                            WorkoutIllustration("equipment_jump_rope", Modifier.weight(1f).height(104.dp))
+                        }
                         Text("Тренировка продолжается", color = colors.textPrimary, style = AppTheme.type.h2)
                         Text(active.title, color = colors.textSecondary, style = AppTheme.type.bodyS)
                         Text("Время: ${durationAt(active, clockTick)}", color = colors.textSecondary, style = AppTheme.type.caption)
-                        PrimaryButton("Продолжить", onClick = { openEditor(active.id) })
+                        WorkoutPrimaryButton("Продолжить", onClick = { openEditor(active.id) })
                     }
                 } else item {
                     Column(
@@ -152,35 +195,41 @@ fun WorkoutScreen(onBack: () -> Unit) {
                             .background(colors.accentSoft).padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        WorkoutIllustration("exercise_squat", Modifier.size(124.dp))
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            WorkoutIllustration("equipment_dumbbell_large", Modifier.weight(1f).height(104.dp))
+                            WorkoutIllustration("equipment_jump_rope", Modifier.weight(1f).height(104.dp))
+                        }
                         Text("Готов к тренировке?", color = colors.textPrimary, style = AppTheme.type.h2)
                         Text("Выбери шаблон или собери собственную программу",
                             color = colors.textSecondary, style = AppTheme.type.bodyS)
-                        PrimaryButton("＋ Создать тренировку", onClick = {
+                        WorkoutPrimaryButton("＋ Создать тренировку", onClick = {
                             title = "Моя тренировка"; showCustomWorkoutDialog = true
                         })
                     }
                 }
-                item { SectionHeading("Разделы") }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        NavigationTile("▤", "История", Modifier.weight(1f)) { route = WorkoutRoute.HISTORY }
-                        NavigationTile("▦", "Шаблоны", Modifier.weight(1f)) { route = WorkoutRoute.TEMPLATES }
-                    }
-                }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        NavigationTile("↗", "Прогресс", Modifier.weight(1f)) { route = WorkoutRoute.PROGRESS }
-                        NavigationTile("⚙", "Настройки", Modifier.weight(1f)) { route = WorkoutRoute.SETTINGS }
-                    }
-                }
                 item { SectionHeading("Шаблоны тренировок") }
                 items(workoutTemplates.take(3)) { template ->
-                    TemplateCard(template) { startTemplate(template) }
+                    TemplateCard(template) { previewTemplate = template; route = WorkoutRoute.TEMPLATE_DETAIL }
                 }
                 item {
                     TextButton(onClick = { route = WorkoutRoute.TEMPLATES }, modifier = Modifier.fillMaxWidth()) {
                         Text("Все шаблоны →")
+                    }
+                }
+                item {
+                    WorkoutOutlinedButton(onClick = { route = WorkoutRoute.HISTORY }) {
+                        Text("История тренировок")
+                    }
+                }
+                item {
+                    WorkoutOutlinedButton(onClick = { route = WorkoutRoute.SETTINGS }) {
+                        Text("Настройки")
+                    }
+                }
+                item {
+                    WorkoutOutlinedButton(onClick = { route = WorkoutRoute.PROGRESS }) {
+                        Text("Прогресс")
                     }
                 }
                 item { SectionHeading("Последние тренировки") }
@@ -199,12 +248,64 @@ fun WorkoutScreen(onBack: () -> Unit) {
             ) {
                 item { Text("Выбери готовую программу или начни с пустой тренировки",
                     color = colors.textSecondary, style = AppTheme.type.bodyS) }
-                items(workoutTemplates) { template -> TemplateCard(template) { startTemplate(template) } }
                 item {
-                    OutlinedButton(onClick = {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("Все", "Силовые", "Кардио", "Пресс").forEach { value ->
+                            PillChip(value, if (templateFilter == value) colors.accent else colors.surface,
+                                if (templateFilter == value) colors.inkOn else colors.textSecondary,
+                                onClick = { templateFilter = value })
+                        }
+                    }
+                }
+                items(workoutTemplates.filter { template ->
+                    templateFilter == "Все" || template.title.contains(
+                        if (templateFilter == "Силовые") "Силов" else templateFilter, true)
+                }) { template -> TemplateCard(template) { previewTemplate = template; route = WorkoutRoute.TEMPLATE_DETAIL } }
+                item {
+                    WorkoutOutlinedButton(onClick = {
                         title = "Моя тренировка"; showCustomWorkoutDialog = true
                     }, modifier = Modifier.fillMaxWidth()) { Text("＋ Создать свою") }
                 }
+            }
+
+            WorkoutRoute.TEMPLATE_DETAIL -> LazyColumn(
+                Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item {
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp))
+                        .background(colors.accentSoft).padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        WorkoutIllustration(templateIllustrationAsset(previewTemplate),
+                            Modifier.fillMaxWidth().height(140.dp))
+                        Text(previewTemplate.title, color = colors.textPrimary, style = AppTheme.type.h2)
+                        Text(previewTemplate.subtitle, color = colors.textSecondary, style = AppTheme.type.bodyS)
+                        Text("◷ ${previewTemplate.duration} · ${previewTemplate.exercises.size} упр.",
+                            color = colors.textSecondary, style = AppTheme.type.bodyS)
+                    }
+                }
+                item { SectionHeading("Упражнения") }
+                items(previewTemplate.exercises.withIndex().toList()) { (index, name) ->
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                        .background(colors.surface).padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("${index + 1}", color = colors.accent, style = AppTheme.type.bodyL)
+                        WorkoutIllustration(exerciseIllustrationAsset(name), Modifier.size(64.dp))
+                        Text(name, color = colors.textPrimary, style = AppTheme.type.bodyL,
+                            modifier = Modifier.weight(1f))
+                    }
+                }
+                item {
+                    WorkoutPrimaryButton(if (active == null) "▶ Начать тренировку" else "Продолжить текущую тренировку",
+                        enabled = !creatingWorkout,
+                        onClick = {
+                            if (active != null) openEditor(active.id)
+                            else createWorkout(previewTemplate.title, previewTemplate.exercises, adBeforeCreation = true)
+                        })
+                }
+                item { Spacer(Modifier.height(24.dp)) }
             }
 
             WorkoutRoute.EDITOR -> {
@@ -221,13 +322,21 @@ fun WorkoutScreen(onBack: () -> Unit) {
                             verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(editorSession.title, modifier = Modifier.weight(1f), color = colors.textPrimary, style = AppTheme.type.h2)
-                                if (editorSession.endedAtMillis == null) TextButton(onClick = { renameValue = editorSession.title; showRenameWorkoutDialog = true }) { Text("Изменить") }
+                                if (editorSession.endedAtMillis == null) {
+                                    IconButton(onClick = {
+                                        renameValue = editorSession.title
+                                        showRenameWorkoutDialog = true
+                                    }) {
+                                        Icon(Icons.Outlined.Edit, contentDescription = "Редактировать название",
+                                            tint = colors.accent)
+                                    }
+                                }
                             }
                             Text("Начата · ${formatDate(editorSession.startedAtMillis)}",
                                 color = colors.textSecondary, style = AppTheme.type.caption)
                             if (editorSession.endedAtMillis == null) {
-                                PrimaryButton("＋ Добавить упражнение", onClick = { route = WorkoutRoute.EXERCISE_PICKER })
-                                OutlinedButton(onClick = { showDeleteWorkoutDialog = true },
+                                WorkoutPrimaryButton("＋ Добавить упражнение", onClick = { route = WorkoutRoute.EXERCISE_PICKER })
+                                WorkoutOutlinedButton(onClick = { showDeleteWorkoutDialog = true },
                                     modifier = Modifier.fillMaxWidth()) { Text("Завершить тренировку") }
                             } else {
                                 Text("Тренировка завершена · ${duration(editorSession)}",
@@ -268,7 +377,7 @@ fun WorkoutScreen(onBack: () -> Unit) {
             }
 
             WorkoutRoute.EXERCISE_PICKER -> {
-                var query by remember { mutableStateOf("") }
+                var query by rememberSaveable { mutableStateOf("") }
                 LazyColumn(Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -282,7 +391,7 @@ fun WorkoutScreen(onBack: () -> Unit) {
                                 val sessionId = editorSession?.id ?: return@clickableNoRipple
                                 scope.launch { repository.addExercise(sessionId, name); route = WorkoutRoute.EDITOR }
                             }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("🏃", fontSize = 24.sp)
+                            WorkoutIllustration(exerciseIllustrationAsset(name), Modifier.size(64.dp))
                             Text(name, modifier = Modifier.weight(1f).padding(start = 12.dp),
                                 color = colors.textPrimary, style = AppTheme.type.bodyL)
                             Text("＋", color = colors.accent, fontSize = 24.sp)
@@ -291,9 +400,9 @@ fun WorkoutScreen(onBack: () -> Unit) {
                     item {
                         OutlinedTextField(exerciseName, { exerciseName = it }, modifier = Modifier.fillMaxWidth(),
                             label = { Text("Своё упражнение") }, singleLine = true)
-                        PrimaryButton("Добавить своё упражнение", enabled = exerciseName.isNotBlank(),
+                        WorkoutPrimaryButton("Добавить своё упражнение", enabled = exerciseName.isNotBlank(),
                             onClick = {
-                                val sessionId = editorSession?.id ?: return@PrimaryButton
+                                val sessionId = editorSession?.id ?: return@WorkoutPrimaryButton
                                 scope.launch { repository.addExercise(sessionId, exerciseName); exerciseName = ""; route = WorkoutRoute.EDITOR }
                             })
                     }
@@ -337,7 +446,7 @@ fun WorkoutScreen(onBack: () -> Unit) {
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
                             .background(colors.accentSoft).padding(18.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("🏋️", fontSize = 44.sp)
+                            WorkoutIllustration(sessionIllustrationAsset(selected.title), Modifier.align(Alignment.End).size(width = 180.dp, height = 112.dp))
                             Text(selected.title, color = colors.textPrimary, style = AppTheme.type.h2)
                             Text("${formatDate(selected.startedAtMillis)} · ${duration(selected)}",
                                 color = colors.textSecondary, style = AppTheme.type.bodyS)
@@ -351,7 +460,7 @@ fun WorkoutScreen(onBack: () -> Unit) {
                         ExerciseCard(exercise.name, sets, false, {}, {}, {}, {})
                     }
                     item {
-                        OutlinedButton(onClick = { showDeleteWorkoutDialog = true },
+                        WorkoutOutlinedButton(onClick = { showDeleteWorkoutDialog = true },
                             modifier = Modifier.fillMaxWidth()) { Text("Удалить тренировку") }
                     }
                 }
@@ -361,7 +470,6 @@ fun WorkoutScreen(onBack: () -> Unit) {
                 contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 item { SectionHeading("Общие") }
                 item { SettingInfoCard("🔔", "Уведомления", "Напоминания о тренировках") }
-                item { SettingInfoCard("🌙", "Тема", "Используется тема приложения") }
                 item { SectionHeading("Данные") }
                 item { SettingInfoCard("💾", "Хранение", "Тренировки сохраняются локально на устройстве") }
                 item { SettingInfoCard("🔒", "Приватность", "Данные тренировок не отправляются в облако") }
@@ -374,7 +482,7 @@ fun WorkoutScreen(onBack: () -> Unit) {
                 val totalMinutes = completed.sumOf {
                     ((it.endedAtMillis ?: it.startedAtMillis) - it.startedAtMillis).coerceAtLeast(0L) / 60_000L
                 }
-                var progressPeriod by remember { mutableStateOf("Неделя") }
+                var progressPeriod by rememberSaveable { mutableStateOf("Неделя") }
                 val buckets = remember(completed, progressPeriod) { workoutProgressBuckets(completed, progressPeriod) }
                 LazyColumn(Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
@@ -417,6 +525,7 @@ fun WorkoutScreen(onBack: () -> Unit) {
                 }
             }
         }
+        }
     }
 
     if (showRenameWorkoutDialog) {
@@ -437,20 +546,21 @@ fun WorkoutScreen(onBack: () -> Unit) {
 
     if (showCustomWorkoutDialog) {
         AlertDialog(
-            onDismissRequest = { showCustomWorkoutDialog = false },
+            onDismissRequest = { if (!creatingWorkout) showCustomWorkoutDialog = false },
             title = { Text("Новая тренировка") },
-            text = { OutlinedTextField(title, { title = it }, label = { Text("Название") }, singleLine = true) },
-            confirmButton = {
-                TextButton(onClick = {
-                    scope.launch {
-                        val id = repository.startWorkout(title)
-                        selectedId = id
-                        showCustomWorkoutDialog = false
-                        route = WorkoutRoute.EDITOR
-                    }
-                }, enabled = title.isNotBlank()) { Text("Создать") }
+            text = {
+                OutlinedTextField(title, { title = it }, label = { Text("Название") },
+                    enabled = !creatingWorkout, singleLine = true)
             },
-            dismissButton = { TextButton(onClick = { showCustomWorkoutDialog = false }) { Text("Отмена") } },
+            confirmButton = {
+                TextButton(
+                    onClick = { createWorkout(title, adBeforeCreation = route == WorkoutRoute.TEMPLATES) },
+                    enabled = title.isNotBlank() && !creatingWorkout,
+                ) { Text("Создать") }
+            },
+            dismissButton = {
+                TextButton(enabled = !creatingWorkout, onClick = { showCustomWorkoutDialog = false }) { Text("Отмена") }
+            },
         )
     }
 
@@ -467,6 +577,7 @@ fun WorkoutScreen(onBack: () -> Unit) {
                         if (id != null) {
                             if (route == WorkoutRoute.EDITOR && editorSession?.endedAtMillis == null) {
                                 repository.finishWorkout(id)
+                                onWorkoutFinished()
                                 route = WorkoutRoute.HOME
                             } else {
                                 repository.deleteWorkout(id)
@@ -483,19 +594,54 @@ fun WorkoutScreen(onBack: () -> Unit) {
     }
 }
 
+// Both variants share the same minimum height and padding. Long labels and
+// accessibility font sizes can expand naturally instead of being clipped.
+private val workoutButtonMinHeight = 52.dp
+private val workoutButtonPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)
+
 @Composable
-private fun SectionHeading(text: String) {
-    Text(text, color = AppTheme.colors.textPrimary, style = AppTheme.type.h3)
+private fun WorkoutPrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth().heightIn(min = workoutButtonMinHeight),
+        enabled = enabled,
+        shape = AppTheme.shapes.button,
+        contentPadding = workoutButtonPadding,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = AppTheme.colors.accent,
+            contentColor = AppTheme.colors.inkOn,
+        ),
+    ) {
+        Text(text, style = AppTheme.type.h5, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
 }
 
 @Composable
-private fun NavigationTile(icon: String, title: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val colors = AppTheme.colors
-    Column(modifier.clip(RoundedCornerShape(20.dp)).background(colors.surface)
-        .clickableNoRipple(onClick = onClick).padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(icon, color = colors.accent, fontSize = 24.sp)
-        Text(title, color = colors.textPrimary, style = AppTheme.type.bodyL, fontWeight = FontWeight.SemiBold)
+private fun WorkoutOutlinedButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth().heightIn(min = workoutButtonMinHeight),
+        shape = AppTheme.shapes.button,
+        contentPadding = workoutButtonPadding,
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = AppTheme.colors.accent),
+        border = androidx.compose.foundation.BorderStroke(1.dp, AppTheme.colors.accent),
+    ) {
+        ProvideTextStyle(AppTheme.type.h5) { content() }
     }
+}
+
+@Composable
+private fun SectionHeading(text: String) {
+    Text(text, color = AppTheme.colors.textPrimary, style = AppTheme.type.h3)
 }
 
 @Composable
@@ -525,7 +671,9 @@ private fun SessionCard(session: WorkoutSession, onClick: () -> Unit) {
         .clickableNoRipple(onClick = onClick).padding(15.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.size(48.dp).clip(RoundedCornerShape(15.dp)).background(colors.accentSoft),
-            contentAlignment = Alignment.Center) { Text("🏋️", fontSize = 25.sp) }
+            contentAlignment = Alignment.Center) {
+            WorkoutIllustration(sessionIllustrationAsset(session.title), Modifier.fillMaxSize())
+        }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(session.title, color = colors.textPrimary, style = AppTheme.type.bodyL, fontWeight = FontWeight.SemiBold)
             Text("${formatDate(session.startedAtMillis)} · ${duration(session)}",
@@ -558,7 +706,7 @@ private fun ExerciseCard(
                 Text("${set.reps} повт. · ${set.weightKg} кг", color = colors.textPrimary)
             }
         }
-        if (editable) OutlinedButton(onClick = onAddSet, modifier = Modifier.fillMaxWidth()) {
+        if (editable) WorkoutOutlinedButton(onClick = onAddSet, modifier = Modifier.fillMaxWidth()) {
             Text("＋ Добавить подход")
         }
     }
@@ -713,8 +861,12 @@ private fun RestTimerScreen(onFinish: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically),
     ) {
-        Box(Modifier.size(248.dp).clip(RoundedCornerShape(124.dp)).background(colors.accentSoft),
-            contentAlignment = Alignment.Center) {
+        Box(Modifier.size(248.dp), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxSize().padding(10.dp)) {
+                val stroke = androidx.compose.ui.graphics.drawscope.Stroke(12.dp.toPx(), cap = StrokeCap.Round)
+                drawArc(colors.accentSoft, -90f, 360f, false, style = stroke)
+                drawArc(colors.accent, -90f, 360f * remaining / 60f, false, style = stroke)
+            }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(String.format(Locale.US, "%02d:%02d", remaining / 60, remaining % 60),
                     color = colors.textPrimary, style = AppTheme.type.displayS)
@@ -722,10 +874,11 @@ private fun RestTimerScreen(onFinish: () -> Unit) {
                     color = colors.textSecondary, style = AppTheme.type.bodyS)
             }
         }
+        WorkoutIllustration("exercise_side_stretch", Modifier.fillMaxWidth().heightIn(min = 80.dp, max = 160.dp).weight(1f, fill = false))
         Text("Отдых между подходами", color = colors.textPrimary, style = AppTheme.type.h2)
         Text("Восстанови дыхание и подготовься к следующему подходу",
             color = colors.textSecondary, style = AppTheme.type.bodyS)
-        PrimaryButton(if (running) "Ⅱ  Пауза" else if (remaining == 0) "↻  Повторить" else "▶  Продолжить",
+        WorkoutPrimaryButton(if (running) "Ⅱ  Пауза" else if (remaining == 0) "↻  Повторить" else "▶  Продолжить",
             onClick = { if (remaining == 0) remaining = 60; running = !running })
         TextButton(onClick = { remaining = 60; running = true }) { Text("Сбросить таймер") }
         TextButton(onClick = onFinish) { Text("Вернуться к тренировке") }
@@ -740,10 +893,10 @@ private fun durationAt(session: WorkoutSession, now: Long): String {
 
 private fun templateIllustrationAsset(template: WorkoutTemplate): String = when {
     template.title.contains("Кардио", true) -> "equipment_shoes"
-    template.title.contains("Пресс", true) -> "exercise_crunch"
-    template.title.contains("Растяж", true) -> "exercise_overhead_triceps"
-    template.title.contains("Функцион", true) -> "exercise_dumbbell_row"
-    else -> "exercise_squat"
+    template.title.contains("Пресс", true) -> "equipment_ab_wheel"
+    template.title.contains("Растяж", true) -> "equipment_yoga_mat"
+    template.title.contains("Функцион", true) -> "equipment_kettlebell"
+    else -> "equipment_dumbbell_large"
 }
 
 private fun exerciseIllustrationAsset(name: String): String = when {
@@ -752,8 +905,9 @@ private fun exerciseIllustrationAsset(name: String): String = when {
     name.contains("отжим", true) -> "exercise_plank_to_pushup"
     name.contains("планк", true) -> "exercise_high_plank"
     name.contains("скручив", true) || name.contains("велосипед", true) -> "exercise_crunch"
+    (name.contains("подъём", true) || name.contains("подъем", true)) && name.contains("гантел", true) -> "exercise_biceps_curl"
     name.contains("подъём", true) || name.contains("подъем", true) -> "exercise_leg_raise"
-    name.contains("подтяг", true) -> "exercise_dumbbell_row"
+    name.contains("подтяг", true) -> "equipment_weight_plate"
     name.contains("берпи", true) -> "exercise_mountain_climber"
     name.contains("бег", true) -> "exercise_high_knees"
     name.contains("прыж", true) -> "exercise_jump_squat"
@@ -761,40 +915,80 @@ private fun exerciseIllustrationAsset(name: String): String = when {
     name.contains("тяга", true) -> "exercise_dumbbell_row"
     name.contains("развед", true) -> "exercise_lateral_raise"
     name.contains("мост", true) -> "exercise_glute_bridge"
-    name.contains("растяж", true) || name.contains("наклон", true) -> "exercise_overhead_triceps"
+    name.contains("скакал", true) -> "equipment_jump_rope"
+    name.contains("растяж", true) || name.contains("наклон", true) || name.contains("поворот", true) -> "exercise_side_stretch"
     else -> "exercise_squat_hold"
 }
 
+private fun sessionIllustrationAsset(title: String): String = when {
+    title.contains("Кардио", true) -> "equipment_shoes"
+    title.contains("Пресс", true) -> "equipment_ab_wheel"
+    title.contains("Растяж", true) -> "equipment_yoga_mat"
+    title.contains("Функцион", true) -> "equipment_kettlebell"
+    else -> "equipment_dumbbell_large"
+}
+
+// Coordinates refer to the original 1536 × 1024 sprite sheet. The source remains
+// intact; crops are decoded once and shared by all workout screens.
+private data class PoseRegion(val x: Int, val y: Int, val width: Int, val height: Int)
+private val poseRegions = mapOf(
+    "exercise_squat" to PoseRegion(24, 330, 192, 254),
+    "exercise_lunge" to PoseRegion(220, 330, 194, 218),
+    "exercise_high_plank" to PoseRegion(427, 345, 271, 182),
+    "exercise_mountain_climber" to PoseRegion(699, 345, 250, 182),
+    "exercise_glute_bridge" to PoseRegion(940, 380, 254, 147),
+    "exercise_crunch" to PoseRegion(1190, 414, 259, 114),
+    "exercise_leg_raise" to PoseRegion(1444, 318, 92, 210),
+    "exercise_plank_to_pushup" to PoseRegion(0, 588, 270, 168),
+    "exercise_side_plank" to PoseRegion(342, 552, 280, 202),
+    "exercise_dumbbell_row" to PoseRegion(619, 536, 145, 234),
+    "exercise_overhead_press" to PoseRegion(801, 528, 131, 252),
+    "exercise_biceps_curl" to PoseRegion(961, 530, 132, 249),
+    "exercise_step_up" to PoseRegion(1386, 536, 150, 240),
+    "exercise_squat_hold" to PoseRegion(27, 826, 145, 193),
+    "exercise_jump_squat" to PoseRegion(188, 766, 170, 254),
+    "exercise_high_knees" to PoseRegion(371, 764, 152, 257),
+    "exercise_lateral_raise" to PoseRegion(746, 780, 240, 244),
+    "exercise_overhead_triceps" to PoseRegion(1186, 773, 107, 251),
+    "exercise_side_stretch" to PoseRegion(1342, 775, 169, 249),
+)
+
+private object WorkoutArt {
+    private val poses = mutableMapOf<String, ImageBitmap>()
+    private var sheet: Bitmap? = null
+
+    @Synchronized
+    fun pose(resources: android.content.res.Resources, name: String): ImageBitmap? {
+        poses[name]?.let { return it }
+        val region = poseRegions[name] ?: return null
+        val source = sheet ?: BitmapFactory.decodeResource(resources, R.drawable.workout_pose_sheet,
+            BitmapFactory.Options().apply { inScaled = false }).also { sheet = it }
+        return Bitmap.createBitmap(source, region.x, region.y, region.width, region.height)
+            .asImageBitmap().also { poses[name] = it }
+    }
+}
+
+private val equipmentResources = mapOf(
+    "equipment_dumbbell_large" to R.drawable.equipment_dumbbell_large,
+    "equipment_dumbbell_small" to R.drawable.equipment_dumbbell_small,
+    "equipment_kettlebell" to R.drawable.equipment_kettlebell,
+    "equipment_shoes" to R.drawable.step_sneaker,
+    "equipment_yoga_mat" to R.drawable.equipment_yoga_mat,
+    "equipment_ab_wheel" to R.drawable.equipment_ab_wheel,
+    "equipment_jump_rope" to R.drawable.equipment_jump_rope,
+    "equipment_weight_plate" to R.drawable.equipment_weight_plate,
+)
+
 @Composable
 private fun WorkoutIllustration(assetName: String, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    val image = remember(context, assetName) {
-        runCatching {
-            context.assets.open("workout/workout_images_split.zip").use { archive ->
-                ZipInputStream(archive).use { zip ->
-                    var entry = zip.nextEntry
-                    while (entry != null) {
-                        if (!entry.isDirectory && entry.name == "$assetName.png") {
-                            return@use BitmapFactory.decodeStream(zip)?.asImageBitmap()
-                        }
-                        zip.closeEntry()
-                        entry = zip.nextEntry
-                    }
-                    null
-                }
-            }
-        }.getOrNull()
-    }
-
-    if (image != null) {
-        Image(
-            bitmap = image,
-            contentDescription = assetName.replace('_', ' '),
-            modifier = modifier,
-            contentScale = ContentScale.Fit,
-        )
+    val equipment = equipmentResources[assetName]
+    if (equipment != null) {
+        Image(painterResource(equipment), contentDescription = null,
+            modifier = modifier, contentScale = ContentScale.Fit)
     } else {
-        // The screen remains safe if the optional split-image archive has not been added yet.
-        Box(modifier = modifier)
+        val resources = LocalContext.current.resources
+        val image = remember(resources, assetName) { WorkoutArt.pose(resources, assetName) }
+        if (image != null) Image(bitmap = image, contentDescription = null,
+            modifier = modifier, contentScale = ContentScale.Fit)
     }
 }

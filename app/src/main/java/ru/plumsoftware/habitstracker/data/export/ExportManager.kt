@@ -221,6 +221,7 @@ class ExportManager(
         val reminderTimeMinute: Int, val reminderInterval: Int, val categoryId: String?,
         val emoji: String, val weekdays: String, val chainedAfterId: String?,
         val freezeEnabled: Boolean, val archived: Boolean,
+        val activityLink: String? = null,
     )
 
     @Serializable
@@ -256,7 +257,7 @@ class ExportManager(
                 HabitDto(
                     it.id, it.title, it.body, Periodicity.toInt(it.periodicity), it.creationDate,
                     it.targetCount, it.reminderTimeHour, it.reminderTimeMinute, it.reminderInterval,
-                    it.categoryId, it.emoji, it.weekdays, it.chainedAfterId, it.freezeEnabled, it.archived,
+                    it.categoryId, it.emoji, it.weekdays, it.chainedAfterId, it.freezeEnabled, it.archived, it.activityLink,
                 )
             },
             completions = completions.map { CompletionDto(it.id, it.habitId, it.completionDate, it.completed, it.completedCount) },
@@ -284,6 +285,7 @@ class ExportManager(
                 reminderTimeMinute = it.reminderTimeMinute, reminderInterval = it.reminderInterval,
                 categoryId = it.categoryId, emoji = it.emoji, weekdays = it.weekdays,
                 chainedAfterId = it.chainedAfterId, freezeEnabled = it.freezeEnabled, archived = it.archived,
+                activityLink = it.activityLink,
             )
         }
         val completions = backup.completions.map {

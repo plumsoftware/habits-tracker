@@ -28,11 +28,17 @@ data class Habit(
     // Заморозка стрика (ТЗ §7.4.2): 1 пропуск в неделю не сбрасывает серию.
     val freezeEnabled: Boolean = false,
     // Архив (ТЗ §11.3): привычка скрыта из активных списков, история отметок сохраняется.
-    val archived: Boolean = false
+    val archived: Boolean = false,
+    val activityLink: String? = null
 ) {
     /** Множество дней недели (Calendar.DAY_OF_WEEK) для BY_WEEKDAYS; пусто если не задано. */
     val weekdaySet: Set<Int>
         get() = weekdays.split(",").mapNotNull { it.trim().toIntOrNull() }.toSet()
 
     val isByWeekdays: Boolean get() = weekdays.isNotBlank()
+}
+
+object HabitActivityLink {
+    const val SLEEP = "sleep"
+    const val WORKOUT = "workout"
 }

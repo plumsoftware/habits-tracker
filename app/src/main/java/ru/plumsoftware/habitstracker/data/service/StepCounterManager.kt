@@ -6,10 +6,21 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import ru.plumsoftware.habitstracker.data.database.WellnessActivity
+import ru.plumsoftware.habitstracker.ui.widget.WidgetUpdater
 
 object StepCounterManager {
     private const val PREFS = "step_counter_settings"
     private const val KEY_ENABLED = "tracking_enabled"
+
+    fun dailyGoal(context: Context): Int =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("daily_goal", 10_000).coerceIn(1, 100_000)
+
+    fun setDailyGoal(context: Context, goal: Int) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putInt("daily_goal", goal.coerceIn(1, 100_000)).apply()
+        WidgetUpdater.updateWellness(context, WellnessActivity.STEPS)
+    }
 
     fun hasPermission(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||

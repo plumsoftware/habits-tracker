@@ -25,6 +25,9 @@ interface HabitDao {
     suspend fun deleteAllHabits()
 
     // Активные привычки (без архивных) — для всех рабочих списков.
+    @Query("SELECT * FROM habits WHERE archived = 0 AND activityLink = :activity")
+    suspend fun getLinkedHabits(activity: String): List<Habit>
+
     @Query("SELECT * FROM habits WHERE archived = 0")
     fun getAllHabits(): Flow<List<Habit>>
 

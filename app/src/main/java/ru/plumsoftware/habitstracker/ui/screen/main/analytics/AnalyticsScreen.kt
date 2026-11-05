@@ -1,7 +1,17 @@
 package ru.plumsoftware.habitstracker.ui.screen.main.analytics
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.rememberLazyListState
+import ru.plumsoftware.habitstracker.ui.components.AppScreenTopBar
+import ru.plumsoftware.habitstracker.data.database.WellnessRepository
+import ru.plumsoftware.habitstracker.data.model.WorkoutSession
+import org.koin.compose.koinInject
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,7 +42,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.plumsoftware.habitstracker.data.model.Category
@@ -39,6 +49,7 @@ import ru.plumsoftware.habitstracker.data.model.Habit
 import ru.plumsoftware.habitstracker.ui.components.AppIcon
 import ru.plumsoftware.habitstracker.ui.components.HabitIcons
 import ru.plumsoftware.habitstracker.ui.components.clickableNoRipple
+import ru.plumsoftware.habitstracker.ui.screen.main.home.Achievement
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeState
 import ru.plumsoftware.habitstracker.ui.theme.AppTheme
 import ru.plumsoftware.habitstracker.ui.theme.softShadow
@@ -64,13 +75,37 @@ fun AnalyticsScreen(
 ) {
     val colors = AppTheme.colors
     val spacing = AppTheme.spacing
-    var period by remember { mutableStateOf(Period.WEEK) }
+    var period by rememberSaveable { mutableStateOf(Period.WEEK) }
+    var workoutsMode by rememberSaveable { mutableStateOf(false) }
+    var achievementsOpen by rememberSaveable { mutableStateOf(false) }
+    val habitsScroll = rememberLazyListState()
+    val workoutsScroll = rememberLazyListState()
+    val repository: WellnessRepository = koinInject()
+    val sessions by remember(repository) { repository.workouts() }.collectAsState(initial = emptyList())
+    BackHandler(enabled = achievementsOpen) { achievementsOpen = false }
+    if (achievementsOpen) {
+        Column(modifier.fillMaxSize().background(colors.bgScreen)
+            .windowInsetsPadding(WindowInsets.safeDrawing)) {
+            AppScreenTopBar("Достижения", onBack = { achievementsOpen = false })
+            LazyColumn(
+                contentPadding = PaddingValues(start = spacing.screenH, end = spacing.screenH,
+                    bottom = spacing.screenBottomNav, top = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                items(state.achievements, key = { it.title }) { achievement ->
+                    AchievementRow(achievement)
+                }
+            }
+        }
+        return
+    }
 
     val bars = remember(period, state) { barsForPeriod(period, state) }
     val checks = bars.sumOf { it.value }
     val rate = (state.monthlyStats.completionRate * 100).toInt()
 
     LazyColumn(
+        state = if (workoutsMode) workoutsScroll else habitsScroll,
         modifier = modifier.fillMaxWidth().background(colors.bgScreen),
         contentPadding = PaddingValues(
             start = spacing.screenH, end = spacing.screenH,
@@ -79,14 +114,43 @@ fun AnalyticsScreen(
         verticalArrangement = Arrangement.spacedBy(spacing.sectionGap),
     ) {
         item { Text("Аналитика", style = AppTheme.type.h1, color = colors.textPrimary) }
+        item {
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(colors.surface).padding(4.dp)) {
+                listOf("Привычки", "Тренировки").forEachIndexed { index, title ->
+                    val selected = workoutsMode == (index == 1)
+                    Box(Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
+                        .background(if (selected) colors.accent else Color.Transparent)
+                        .clickableNoRipple { workoutsMode = index == 1 }.padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center) {
+                        Text(title, color = if (selected) colors.inkOn else colors.textSecondary, style = AppTheme.type.label)
+                    }
+                }
+            }
+        }
         item { PeriodSwitch(period = period, onSelect = { period = it }) }
-        item { MetricTiles(rate = rate, checks = checks, period = period) }
-        item { DynamicsCard(bars = bars, period = period) }
-        item { InsightTiles(state = state) }
-        item { StreaksCard(state = state, onHabitClick = onHabitClick) }
-        item { AchievementsCard(achievements = state.achievements) }
-        state.correlations.firstOrNull()?.let { corr ->
-            item { PatternCard(fromTitle = corr.fromTitle, toTitle = corr.toTitle, rate = corr.rate) }
+        if (workoutsMode) {
+            workoutAnalyticsItems(sessions, period)
+        } else {
+            item { MetricTiles(rate = rate, checks = checks, period = period) }
+            item { DynamicsCard(bars = bars, period = period) }
+            item { InsightTiles(state = state) }
+            item { StreaksCard(state = state, onHabitClick = onHabitClick) }
+
+            state.correlations.firstOrNull()?.let { corr ->
+                item { PatternCard(fromTitle = corr.fromTitle, toTitle = corr.toTitle, rate = corr.rate) }
+            }
+        }
+        item {
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(colors.surface)
+                .clickableNoRipple { achievementsOpen = true }.padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Достижения", style = AppTheme.type.h3, color = colors.textPrimary)
+                    Text("${state.achievements.count { it.unlocked }} из ${state.achievements.size} открыто",
+                        style = AppTheme.type.caption, color = colors.textSecondary)
+                }
+                Text("›", style = AppTheme.type.h2, color = colors.accent)
+            }
         }
     }
 }
@@ -99,40 +163,8 @@ fun AnalyticsScreenTablet(
     modifier: Modifier = Modifier,
     onHabitClick: (Habit) -> Unit = {},
 ) {
-    val colors = AppTheme.colors
-    val spacing = AppTheme.spacing
-    var period by remember { mutableStateOf(Period.WEEK) }
-    val bars = remember(period, state) { barsForPeriod(period, state) }
-    val checks = bars.sumOf { it.value }
-    val rate = (state.monthlyStats.completionRate * 100).toInt()
-
-    Row(
-        modifier = modifier.fillMaxWidth().background(colors.bgScreen)
-            .padding(horizontal = spacing.screenH, vertical = spacing.screenTop),
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-    ) {
-        Column(
-            modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(spacing.sectionGap),
-        ) {
-            Text("Аналитика", style = AppTheme.type.h1, color = colors.textPrimary)
-            PeriodSwitch(period = period, onSelect = { period = it })
-            MetricTiles(rate = rate, checks = checks, period = period)
-            DynamicsCard(bars = bars, period = period)
-            InsightTiles(state = state)
-            Spacer(Modifier.height(spacing.screenBottomPlain))
-        }
-        Column(
-            modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(spacing.sectionGap),
-        ) {
-            StreaksCard(state = state, onHabitClick = onHabitClick)
-            AchievementsCard(achievements = state.achievements)
-            state.correlations.firstOrNull()?.let { corr ->
-                PatternCard(fromTitle = corr.fromTitle, toTitle = corr.toTitle, rate = corr.rate)
-            }
-            Spacer(Modifier.height(spacing.screenBottomPlain))
-        }
+    Box(modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        AnalyticsScreen(state = state, modifier = Modifier.widthIn(max = 840.dp).fillMaxSize(), onHabitClick = onHabitClick)
     }
 }
 
@@ -212,7 +244,8 @@ private fun MetricTiles(rate: Int, checks: Int, period: Period) {
 // ---------- §10.3 График «Динамика» ----------
 
 @Composable
-private fun DynamicsCard(bars: List<Bar>, period: Period) {
+private fun DynamicsCard(bars: List<Bar>, period: Period, title: String = "Динамика",
+    emptyMessage: String = "Данных пока мало. Отмечайте привычки — график появится через пару дней") {
     val colors = AppTheme.colors
     Column(
         modifier = Modifier
@@ -227,13 +260,13 @@ private fun DynamicsCard(bars: List<Bar>, period: Period) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("Динамика", style = AppTheme.type.h5, color = colors.textPrimary)
+            Text(title, style = AppTheme.type.h5, color = colors.textPrimary)
             Text(period.hint, style = AppTheme.type.captionS, color = colors.textSecondary)
         }
         Spacer(Modifier.height(16.dp))
         if (bars.all { it.value == 0 }) {
             Text(
-                "Данных пока мало. Отмечайте привычки — график появится через пару дней",
+                emptyMessage,
                 style = AppTheme.type.caption, color = colors.textSecondary,
             )
         } else {
@@ -241,7 +274,9 @@ private fun DynamicsCard(bars: List<Bar>, period: Period) {
             var appeared by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) { appeared = true }
             Row(
-                modifier = Modifier.fillMaxWidth().height(150.dp),
+                modifier = Modifier.fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .width((bars.size.coerceAtLeast(7) * 44).dp).height(150.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
@@ -282,8 +317,8 @@ private fun DynamicsCard(bars: List<Bar>, period: Period) {
 private fun InsightTiles(state: HomeState) {
     val colors = AppTheme.colors
     val days = state.weeklyStats.days
-    val best = days.maxByOrNull { it.completedCount }?.dayName ?: "—"
-    val worst = days.minByOrNull { it.completedCount }?.dayName ?: "—"
+    val best = days.maxByOrNull { it.completedCount }?.dayName ?: "–"
+    val worst = days.minByOrNull { it.completedCount }?.dayName ?: "–"
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
         InsightTile(
             modifier = Modifier.weight(1f),
@@ -390,39 +425,27 @@ private fun StreaksCard(state: HomeState, onHabitClick: (Habit) -> Unit) {
 // ---------- §10.6 Достижения ----------
 
 @Composable
-private fun AchievementsCard(achievements: List<ru.plumsoftware.habitstracker.ui.screen.main.home.Achievement>) {
+private fun AchievementRow(achievement: Achievement) {
     val colors = AppTheme.colors
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .softShadow(AppTheme.elevation.cardRaised, AppTheme.shapes.cardL)
-            .clip(AppTheme.shapes.cardL)
-            .background(colors.surface)
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+    Row(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
+            .background(colors.surface).padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Достижения", style = AppTheme.type.h5, color = colors.textPrimary)
-        Spacer(Modifier.height(4.dp))
-        achievements.chunked(3).forEach { rowItems ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                rowItems.forEach { ach ->
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(if (ach.unlocked) colors.warningSoft else colors.surfaceMuted)
-                            .padding(vertical = 14.dp, horizontal = 10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(ach.emoji, fontSize = 22.sp, modifier = Modifier.alpha(if (ach.unlocked) 1f else 0.45f))
-                        Text(ach.title, style = AppTheme.type.label, color = colors.ink, textAlign = TextAlign.Center)
-                        Text(ach.status, style = AppTheme.type.captionS, color = colors.textSecondary, textAlign = TextAlign.Center)
-                    }
-                }
-                // добить пустыми ячейками до 3, чтобы ширина не «прыгала»
-                repeat(3 - rowItems.size) { Spacer(Modifier.weight(1f)) }
-            }
+        Box(
+            Modifier.size(48.dp).clip(RoundedCornerShape(15.dp))
+                .background(if (achievement.unlocked) colors.warningSoft else colors.accentSoft),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(achievement.emoji, fontSize = 23.sp,
+                modifier = Modifier.alpha(if (achievement.unlocked) 1f else 0.55f))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(achievement.title, style = AppTheme.type.h5, color = colors.textPrimary)
+            Text(achievement.description, style = AppTheme.type.caption, color = colors.textSecondary)
+            Text(achievement.status.replaceFirstChar { it.uppercase() }, style = AppTheme.type.captionS,
+                color = if (achievement.unlocked) colors.success else colors.accent)
         }
     }
 }
@@ -489,4 +512,95 @@ private fun habitEmoji(category: Category?): String = when (category?.id) {
     Category.ID_STUDY -> "📚"
     Category.ID_PERSONAL -> "🌙"
     else -> "🎯"
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.workoutAnalyticsItems(
+    sessions: List<WorkoutSession>, period: Period,
+) {
+    val now = System.currentTimeMillis()
+    val start = Calendar.getInstance().apply {
+        timeInMillis = now
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        when (period) {
+            Period.WEEK -> add(Calendar.DAY_OF_YEAR, -6)
+            Period.MONTH -> set(Calendar.DAY_OF_MONTH, 1)
+            Period.YEAR -> { set(Calendar.DAY_OF_YEAR, 1) }
+        }
+    }
+    val completed = sessions.filter { it.endedAtMillis != null && it.startedAtMillis >= start.timeInMillis && it.startedAtMillis <= now }
+    fun minutes(session: WorkoutSession) = ((session.endedAtMillis!! - session.startedAtMillis).coerceAtLeast(0) / 60_000)
+    val total = completed.sumOf { minutes(it) }
+    val activeDays = completed.map { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date(it.startedAtMillis)) }.distinct().size
+    val buckets = when (period) {
+        Period.WEEK -> 7
+        Period.MONTH -> (start.getActualMaximum(Calendar.DAY_OF_MONTH) + 6) / 7
+        Period.YEAR -> 12
+    }
+    val bars = (0 until buckets).map { index ->
+        val from = (start.clone() as Calendar).apply {
+            when (period) {
+                Period.WEEK -> add(Calendar.DAY_OF_YEAR, index)
+                Period.MONTH -> add(Calendar.DAY_OF_YEAR, index * 7)
+                Period.YEAR -> add(Calendar.MONTH, index)
+            }
+        }
+        val to = (from.clone() as Calendar).apply {
+            when (period) {
+                Period.WEEK -> add(Calendar.DAY_OF_YEAR, 1)
+                Period.MONTH -> { add(Calendar.DAY_OF_YEAR, 7)
+                    val nextMonth = (start.clone() as Calendar).apply { add(Calendar.MONTH, 1) }
+                    if (timeInMillis > nextMonth.timeInMillis) timeInMillis = nextMonth.timeInMillis
+                }
+                Period.YEAR -> add(Calendar.MONTH, 1)
+            }
+        }
+        val label = when (period) {
+            Period.WEEK -> java.text.SimpleDateFormat("EE", java.util.Locale("ru")).format(from.time)
+            Period.MONTH -> "${index + 1} нед."
+            Period.YEAR -> "${index + 1}"
+        }
+        Bar(label, completed.filter { it.startedAtMillis >= from.timeInMillis && it.startedAtMillis < to.timeInMillis }
+            .sumOf { minutes(it) }.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+    }
+    item {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            WorkoutMetric("Тренировок", completed.size.toString(), true, Modifier.weight(1f))
+            WorkoutMetric("Минут активности", total.toString(), false, Modifier.weight(1f))
+        }
+    }
+    item { DynamicsCard(bars, period, "Время тренировок, мин", "Заверши тренировку — здесь появится время активности за выбранный период") }
+    item {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            WorkoutMetric("Средняя, мин", if (completed.isEmpty()) "–" else (total / completed.size).toString(), false, Modifier.weight(1f))
+            WorkoutMetric("Дней активности", activeDays.toString(), false, Modifier.weight(1f))
+        }
+    }
+    item {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(AppTheme.colors.surface).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Последние тренировки", style = AppTheme.type.h3, color = AppTheme.colors.textPrimary)
+            if (completed.isEmpty()) Text("Нет завершённых тренировок за этот период", color = AppTheme.colors.textSecondary)
+            completed.sortedByDescending { it.startedAtMillis }.take(5).forEach { session ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text(session.title, color = AppTheme.colors.textPrimary, style = AppTheme.type.label)
+                        Text(java.text.SimpleDateFormat("d MMM", java.util.Locale("ru")).format(java.util.Date(session.startedAtMillis)),
+                            color = AppTheme.colors.textSecondary, style = AppTheme.type.caption)
+                    }
+                    Text("${minutes(session)} мин", color = AppTheme.colors.accent, style = AppTheme.type.label)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkoutMetric(title: String, value: String, accent: Boolean, modifier: Modifier) {
+    val colors = AppTheme.colors
+    Column(modifier.clip(RoundedCornerShape(26.dp)).background(if (accent) colors.accent else colors.surface)
+        .padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(title, style = AppTheme.type.caption, color = if (accent) colors.inkOn else colors.textSecondary)
+        Text(value, style = AppTheme.type.numL, color = if (accent) colors.inkOn else colors.textPrimary)
+    }
 }

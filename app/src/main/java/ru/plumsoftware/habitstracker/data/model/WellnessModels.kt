@@ -48,3 +48,13 @@ data class WorkoutSet(
     val weightKg: Double,
     val completed: Boolean = true
 )
+
+/** A manually logged sleep interval, associated with the local wake-up date. */
+@Entity(tableName = "sleep_records")
+data class SleepRecord(
+    @PrimaryKey val dayStartMillis: Long,
+    val startedAtMillis: Long,
+    val endedAtMillis: Long,
+) {
+    val durationMinutes: Int get() = ((endedAtMillis - startedAtMillis) / 60_000L).toInt()
+}

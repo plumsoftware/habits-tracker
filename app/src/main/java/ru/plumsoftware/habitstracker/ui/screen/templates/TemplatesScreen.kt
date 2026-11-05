@@ -1,6 +1,8 @@
 package ru.plumsoftware.habitstracker.ui.screen.templates
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -32,12 +35,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import ru.plumsoftware.habitstracker.R
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ru.plumsoftware.habitstracker.data.model.Category
 import ru.plumsoftware.habitstracker.data.model.Habit
+import ru.plumsoftware.habitstracker.data.model.HabitActivityLink
 import ru.plumsoftware.habitstracker.data.model.Periodicity
 import ru.plumsoftware.habitstracker.ui.components.AppIcon
 import ru.plumsoftware.habitstracker.ui.components.HabitIcons
@@ -56,6 +67,8 @@ fun TemplatesScreen(
     onBack: () -> Unit,
     onAddHabit: (Habit) -> Unit,
 ) {
+    BackHandler(onBack = onBack)
+
     val colors = AppTheme.colors
     val spacing = AppTheme.spacing
     var query by remember { mutableStateOf(TextFieldValue("")) }
@@ -235,30 +248,37 @@ private fun SearchField(query: TextFieldValue, onChange: (TextFieldValue) -> Uni
 
 @Composable
 private fun PacksRow(onAddPack: (HabitPack) -> Unit) {
+    val atlas = ImageBitmap.imageResource(R.drawable.habit_pack_illustrations)
     LazyRow(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
         items(TEMPLATE_PACKS.size) { i ->
-            PackCard(pack = TEMPLATE_PACKS[i], onAdd = { onAddPack(TEMPLATE_PACKS[i]) })
+            PackCard(pack = TEMPLATE_PACKS[i], atlas = atlas, onAdd = { onAddPack(TEMPLATE_PACKS[i]) })
         }
     }
 }
 
 @Composable
-private fun PackCard(pack: HabitPack, onAdd: () -> Unit) {
+private fun PackCard(pack: HabitPack, atlas: ImageBitmap, onAdd: () -> Unit) {
     val colors = AppTheme.colors
     val bg = packBg(pack.tone, colors)
     val textColor = packText(pack.tone, colors)
+    val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val illustration = remember(atlas, pack.artIndex) {
+        val cell = IntSize(atlas.width / 4, atlas.height / 2)
+        BitmapPainter(atlas, IntOffset(pack.artIndex % 4 * cell.width, pack.artIndex / 4 * cell.height), cell)
+    }
     Column(
         modifier = Modifier
-            .width(186.dp)
-            .height(180.dp)
+            .width(186.dp * fontScale)
+            .height(236.dp * fontScale)
             .softShadow(AppTheme.elevation.cardRaised, AppTheme.shapes.card)
             .clip(AppTheme.shapes.card)
             .background(bg)
             .padding(16.dp),
     ) {
-        Text(pack.emoji, fontSize = 26.sp)
+        Image(illustration, contentDescription = null, modifier = Modifier.size(76.dp))
         Spacer(Modifier.height(10.dp))
-        Text(pack.title, style = AppTheme.type.h5, color = textColor)
+        Text(pack.title, style = AppTheme.type.h5, color = textColor, maxLines = 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
         Spacer(Modifier.height(4.dp))
         Text(
             pack.subtitle, style = AppTheme.type.caption, color = textColor.copy(alpha = 0.7f),
@@ -270,6 +290,7 @@ private fun PackCard(pack: HabitPack, onAdd: () -> Unit) {
                 .clip(AppTheme.shapes.pill)
                 .background(colors.accent)
                 .clickableNoRipple(onClick = onAdd)
+                .heightIn(min = 44.dp)
                 .padding(horizontal = 12.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -359,6 +380,7 @@ private data class HabitTemplate(
     val hour: Int = 8,
     val minute: Int = 0,
     val reminderInterval: Int = 10,
+    val activityLink: String? = null,
 ) {
     fun toHabit(): Habit = Habit(
         id = UUID.randomUUID().toString(),
@@ -372,12 +394,14 @@ private data class HabitTemplate(
         reminderInterval = reminderInterval,
         categoryId = categoryId,
         emoji = emoji,
+        activityLink = activityLink,
     )
 }
 
-private enum class PackTone { INK, YELLOW, BLUE }
+private enum class PackTone { INK, YELLOW, BLUE, LILAC, MINT, PEACH }
 
 private data class HabitPack(
+    val artIndex: Int,
     val emoji: String,
     val title: String,
     val subtitle: String,
@@ -387,11 +411,11 @@ private data class HabitPack(
 
 private val TEMPLATE_CATALOG = listOf(
     HabitTemplate("💧", "Пить воду", "8 стаканов · каждый день", Category.ID_HEALTH, targetCount = 8, hour = 8),
-    HabitTemplate("🏃", "Утренняя зарядка", "15 мин · каждый день · 07:00", Category.ID_HEALTH, hour = 7),
+    HabitTemplate("🏃", "Утренняя зарядка", "15 мин · каждый день · 07:00", Category.ID_HEALTH, hour = 7, activityLink = HabitActivityLink.WORKOUT),
     HabitTemplate("📚", "Читать 20 страниц", "каждый день · 21:30", Category.ID_STUDY, hour = 21, minute = 30),
     HabitTemplate("🧘", "Медитация", "10 мин · каждый день", Category.ID_PERSONAL, hour = 22),
     HabitTemplate("🚶", "10 000 шагов", "каждый день", Category.ID_HEALTH, hour = 9),
-    HabitTemplate("🌙", "Спать до 23:00", "каждый день · напоминание", Category.ID_HEALTH, hour = 22, minute = 30),
+    HabitTemplate("🌙", "Спать до 23:00", "каждый день · напоминание", Category.ID_HEALTH, hour = 22, minute = 30, activityLink = HabitActivityLink.SLEEP),
     HabitTemplate("📵", "Без телефона час до сна", "каждый день · 22:00", Category.ID_PERSONAL, hour = 22),
     HabitTemplate("🗒", "План на день", "будни · 09:00", Category.ID_WORK, hour = 9),
     HabitTemplate("🇬🇧", "Английский 15 мин", "каждый день · 20:00", Category.ID_STUDY, hour = 20),
@@ -400,7 +424,7 @@ private val TEMPLATE_CATALOG = listOf(
 
 private val TEMPLATE_PACKS = listOf(
     HabitPack(
-        "🌅", "Утренний ритуал", "Заряд бодрости с утра", PackTone.INK,
+        0, "🌅", "Утренний ритуал", "Заряд бодрости с утра", PackTone.INK,
         listOf(
             TEMPLATE_CATALOG[0], // Пить воду
             TEMPLATE_CATALOG[1], // Зарядка
@@ -408,7 +432,7 @@ private val TEMPLATE_PACKS = listOf(
         ),
     ),
     HabitPack(
-        "🧠", "Фокус и учёба", "Меньше отвлечений, больше знаний", PackTone.YELLOW,
+        1, "🧠", "Фокус и учёба", "Меньше отвлечений, больше знаний", PackTone.YELLOW,
         listOf(
             TEMPLATE_CATALOG[2], // Читать
             TEMPLATE_CATALOG[8], // Английский
@@ -416,25 +440,39 @@ private val TEMPLATE_PACKS = listOf(
         ),
     ),
     HabitPack(
-        "😴", "Здоровый сон", "Ложиться вовремя", PackTone.BLUE,
+        2, "😴", "Здоровый сон", "Ложиться вовремя", PackTone.BLUE,
         listOf(
             TEMPLATE_CATALOG[5], // Спать до 23
             TEMPLATE_CATALOG[6], // Без телефона
             TEMPLATE_CATALOG[3], // Медитация
         ),
     ),
+    HabitPack(3, "👟", "Больше движения", "Зарядка и шаги каждый день", PackTone.BLUE,
+        listOf(TEMPLATE_CATALOG[1], TEMPLATE_CATALOG[4])),
+    HabitPack(4, "💧", "Вода и питание", "Вода и овощи каждый день", PackTone.MINT,
+        listOf(TEMPLATE_CATALOG[0], TEMPLATE_CATALOG[9])),
+    HabitPack(5, "🕯", "Спокойный вечер", "Чтение и пауза без экрана", PackTone.PEACH,
+        listOf(TEMPLATE_CATALOG[2], TEMPLATE_CATALOG[3], TEMPLATE_CATALOG[6])),
+    HabitPack(6, "🗒", "План на день", "Планирование и время на учёбу", PackTone.LILAC,
+        listOf(TEMPLATE_CATALOG[7], TEMPLATE_CATALOG[8])),
 )
 
 private fun packBg(tone: PackTone, colors: ru.plumsoftware.habitstracker.ui.theme.HabitColors): Color = when (tone) {
     PackTone.INK -> colors.ink
     PackTone.YELLOW -> colors.tileYellow
     PackTone.BLUE -> colors.tileBlue
+    PackTone.LILAC -> colors.tileLilac
+    PackTone.MINT -> colors.tileMint
+    PackTone.PEACH -> colors.tilePeach
 }
 
 private fun packText(tone: PackTone, colors: ru.plumsoftware.habitstracker.ui.theme.HabitColors): Color = when (tone) {
     PackTone.INK -> colors.inkOn
     PackTone.YELLOW -> colors.tileYellowText
     PackTone.BLUE -> colors.tileBlueText
+    PackTone.LILAC -> colors.tileLilacText
+    PackTone.MINT -> colors.textPrimary
+    PackTone.PEACH -> colors.tilePeachText
 }
 
 private fun categoryColor(id: String, colors: ru.plumsoftware.habitstracker.ui.theme.HabitColors): Color = when (id) {

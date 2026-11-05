@@ -6,4 +6,5 @@ data class Achievement(
     val title: String,
     val status: String,   // «получено» или прогресс «ещё N»
     val unlocked: Boolean,
+    val description: String,
 )

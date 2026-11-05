@@ -14,9 +14,9 @@ import ru.plumsoftware.habitstracker.data.model.dao.*
 @Database(
     entities = [
         Habit::class, HabitCompletion::class, Notification::class, Category::class,
-        DailySteps::class, WorkoutSession::class, WorkoutExercise::class, WorkoutSet::class
+        DailySteps::class, WorkoutSession::class, WorkoutExercise::class, WorkoutSet::class, SleepRecord::class
     ],
-    version = 10,
+    version = 12,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -113,6 +113,18 @@ abstract class HabitDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS sleep_records (dayStartMillis INTEGER NOT NULL PRIMARY KEY, startedAtMillis INTEGER NOT NULL, endedAtMillis INTEGER NOT NULL)")
+            }
+        }
+
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE habits ADD COLUMN activityLink TEXT")
+            }
+        }
+
         private fun seedBuiltInCategories(db: SupportSQLiteDatabase) {
             fun insertBuiltIn(id: String, name: String, color: Long, order: Int) {
                 db.execSQL("INSERT OR IGNORE INTO categories (id,name,colorArgb,isBuiltIn,sortOrder) VALUES (?,?,?,1,?)", arrayOf<Any>(id,name,color,order))
@@ -126,7 +138,7 @@ abstract class HabitDatabase : RoomDatabase() {
         val databaseModule = module {
             single<HabitDatabase> {
                 Room.databaseBuilder(androidContext(), HabitDatabase::class.java, "habit_database")
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)

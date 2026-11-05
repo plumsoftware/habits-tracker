@@ -16,9 +16,14 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.koin.core.context.GlobalContext
 import ru.plumsoftware.habitstracker.MainActivity
 import ru.plumsoftware.habitstracker.R
@@ -30,6 +35,8 @@ class StepCounterService : Service(), SensorEventListener {
     private lateinit var sensorManager: SensorManager
     private var stepSensor: Sensor? = null
     private lateinit var repository: WellnessRepository
+    private var notificationRefresh: Job? = null
+    private val stepWrites = Mutex()
     private val prefs by lazy { getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
 
     override fun onCreate() {
@@ -41,10 +48,18 @@ class StepCounterService : Service(), SensorEventListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, buildNotification("Ожидаем данные датчика"))
+        startForeground(NOTIFICATION_ID, buildNotification(todaySteps()))
         val sensor = stepSensor ?: run { stopSelf(); return START_NOT_STICKY }
         sensorManager.unregisterListener(this)
         sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
+        if (notificationRefresh?.isActive != true) {
+            notificationRefresh = scope.launch(Dispatchers.Main.immediate) {
+                while (isActive) {
+                    delay(NOTIFICATION_REFRESH_MILLIS)
+                    publishStepNotification()
+                }
+            }
+        }
         return START_STICKY
     }
 
@@ -62,11 +77,10 @@ class StepCounterService : Service(), SensorEventListener {
         }
         prefs.edit().putLong(KEY_DAY, day).putLong(KEY_LAST_TOTAL, total)
             .putInt(KEY_TODAY_STEPS, nextSteps).apply()
-        scope.launch {
-            repository.saveSteps(day, nextSteps)
-            getSystemService(NotificationManager::class.java)
-                .notify(NOTIFICATION_ID, buildNotification("$nextSteps шагов сегодня"))
+        scope.launch(Dispatchers.Main.immediate) {
+            stepWrites.withLock { repository.saveSteps(day, nextSteps) }
         }
+        publishStepNotification()
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
@@ -88,13 +102,24 @@ class StepCounterService : Service(), SensorEventListener {
         }
     }
 
-    private fun buildNotification(text: String): Notification {
+    private fun todaySteps(): Int {
+        val today = startOfDay(System.currentTimeMillis())
+        return if (prefs.getLong(KEY_DAY, -1L) == today) prefs.getInt(KEY_TODAY_STEPS, 0) else 0
+    }
+
+    private fun publishStepNotification() {
+        getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, buildNotification(todaySteps()))
+    }
+
+    private fun buildNotification(steps: Int): Notification {
         val openApp = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Шагомер работает").setContentText(text)
+            .setSmallIcon(R.drawable.icon)
+            .setContentTitle("Шагомер работает").setContentText("Шагов сегодня: $steps")
             .setContentIntent(openApp).setOngoing(true).setOnlyAlertOnce(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setCategory(NotificationCompat.CATEGORY_SERVICE).build()
     }
 
@@ -106,5 +131,6 @@ class StepCounterService : Service(), SensorEventListener {
         private const val KEY_TODAY_STEPS = "today_steps"
         private const val CHANNEL_ID = "step_counter"
         private const val NOTIFICATION_ID = 7301
+        private const val NOTIFICATION_REFRESH_MILLIS = 60 * 60 * 1_000L
     }
 }

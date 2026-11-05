@@ -10,6 +10,18 @@ import ru.plumsoftware.habitstracker.data.model.*
 
 @Dao
 interface WellnessDao {
+    @Query("SELECT * FROM sleep_records ORDER BY dayStartMillis DESC")
+    fun observeSleepRecords(): Flow<List<SleepRecord>>
+
+    @Query("SELECT * FROM sleep_records WHERE dayStartMillis = :dayStart")
+    fun observeSleep(dayStart: Long): Flow<SleepRecord?>
+
+    @Insert
+    suspend fun insertSleep(value: SleepRecord)
+
+    @Update
+    suspend fun updateSleep(value: SleepRecord): Int
+
     @Query("SELECT * FROM daily_steps WHERE dayStartMillis = :dayStart")
     fun observeSteps(dayStart: Long): Flow<DailySteps?>
 
@@ -28,7 +40,13 @@ interface WellnessDao {
     @Insert
     suspend fun insertWorkout(session: WorkoutSession)
 
-    @Query("UPDATE workout_sessions SET endedAtMillis = :endedAt WHERE id = :id")
+    @Query("SELECT * FROM workout_sessions WHERE id = :id")
+    suspend fun getWorkout(id: String): WorkoutSession?
+
+    @Query("SELECT EXISTS(SELECT 1 FROM workout_sessions WHERE startedAtMillis >= :start AND startedAtMillis < :end AND endedAtMillis IS NOT NULL)")
+    suspend fun hasFinishedWorkout(start: Long, end: Long): Boolean
+
+    @Query("UPDATE workout_sessions SET endedAtMillis = :endedAt WHERE id = :id AND endedAtMillis IS NULL")
     suspend fun finishWorkout(id: String, endedAt: Long)
 
     @Query("UPDATE workout_sessions SET title = :title WHERE id = :id")

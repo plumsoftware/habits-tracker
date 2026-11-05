@@ -19,6 +19,7 @@ import ru.plumsoftware.habitstracker.data.service.StepCounterManager
 import ru.plumsoftware.habitstracker.ui.screen.main.home.HomeViewModel
 import ru.plumsoftware.habitstracker.ui.screen.main.notifications.NotificationsViewModel
 import ru.plumsoftware.habitstracker.ui.screen.main.settings.SettingsViewModel
+import ru.plumsoftware.habitstracker.ui.widget.WidgetUpdater
 
 class MyApplication : Application() {
     override fun onCreate() {
@@ -31,7 +32,11 @@ class MyApplication : Application() {
             }
         }
         val wellnessModule = module {
-            single { WellnessRepository(get()) }
+            single {
+                WellnessRepository(get(), get(), get()) { activity ->
+                    WidgetUpdater.updateWellness(this@MyApplication, activity)
+                }
+            }
         }
         startKoin {
             androidContext(this@MyApplication)
