@@ -17,8 +17,8 @@ android {
         applicationId = "ru.plumsoftware.habitstracker"
         minSdk = 24
         targetSdk = 37
-        versionCode = 6
-        versionName = "2.0.0"
+        versionCode = 7
+        versionName = "3.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
